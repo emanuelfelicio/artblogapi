@@ -4,7 +4,6 @@ import (
 	"context"
 )
 
-
 type service struct {
 	repo repository
 }
