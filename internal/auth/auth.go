@@ -24,17 +24,22 @@ type User struct {
 
 type Auth struct {
 	AccessToken string
-	User        *User
+	User        User
 }
 
-func NewUser(username, email, rawPassword string) (*User, error) {
+func NewUser(username, email, rawPassword string) (User, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(rawPassword), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, err
+		return User{}, err
 	}
 
-	return &User{
-		ID:           uuid.New(),
+	id, err := uuid.NewV7()
+	if err != nil {
+		return User{}, err
+	}
+
+	return User{
+		ID:           id,
 		Username:     username,
 		Email:        email,
 		PasswordHash: string(hash),

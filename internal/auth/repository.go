@@ -14,7 +14,7 @@ func NewRepository(q *dbgen.Queries) *repository {
 	return &repository{query: q}
 }
 
-func (r *repository) CreateUser(ctx context.Context, user *User) (*User, error) {
+func (r *repository) CreateUser(ctx context.Context, user User) (User, error) {
 	userParam := dbgen.CreateUserParams{
 		ID:           user.ID,
 		Username:     user.Username,
@@ -23,10 +23,10 @@ func (r *repository) CreateUser(ctx context.Context, user *User) (*User, error) 
 	}
 	dbUser, err := r.query.CreateUser(ctx, userParam)
 	if err != nil {
-		return nil, err
+		return User{}, err
 	}
 
-	return &User{
+	return User{
 		ID:       dbUser.ID,
 		Username: dbUser.Username,
 		Email:    dbUser.Email,
