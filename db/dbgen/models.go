@@ -5,10 +5,8 @@
 package dbgen
 
 import (
-	"database/sql"
-	"time"
-
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type User struct {
@@ -16,11 +14,11 @@ type User struct {
 	Username     string
 	Email        string
 	PasswordHash string
-	DisplayName  sql.NullString
-	Bio          sql.NullString
-	AvatarUrl    sql.NullString
-	BannerUrl    sql.NullString
+	DisplayName  pgtype.Text
+	Bio          pgtype.Text
+	AvatarUrl    pgtype.Text
+	BannerUrl    pgtype.Text
 	IsActive     bool
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
 }

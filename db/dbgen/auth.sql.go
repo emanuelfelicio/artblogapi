@@ -16,7 +16,7 @@ SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)
 `
 
 func (q *Queries) CheckEmailExists(ctx context.Context, email string) (bool, error) {
-	row := q.db.QueryRowContext(ctx, checkEmailExists, email)
+	row := q.db.QueryRow(ctx, checkEmailExists, email)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -27,7 +27,7 @@ SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)
 `
 
 func (q *Queries) CheckUsernameExists(ctx context.Context, username string) (bool, error) {
-	row := q.db.QueryRowContext(ctx, checkUsernameExists, username)
+	row := q.db.QueryRow(ctx, checkUsernameExists, username)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -49,7 +49,7 @@ type CreateUserParams struct {
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
-	row := q.db.QueryRowContext(ctx, createUser,
+	row := q.db.QueryRow(ctx, createUser,
 		arg.ID,
 		arg.Username,
 		arg.Email,
@@ -77,7 +77,7 @@ SELECT id, username, email, password_hash, display_name, bio, avatar_url, banner
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
-	row := q.db.QueryRowContext(ctx, getUserByEmail, email)
+	row := q.db.QueryRow(ctx, getUserByEmail, email)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -100,7 +100,7 @@ SELECT id, username, email, password_hash, display_name, bio, avatar_url, banner
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
-	row := q.db.QueryRowContext(ctx, getUserByUsername, username)
+	row := q.db.QueryRow(ctx, getUserByUsername, username)
 	var i User
 	err := row.Scan(
 		&i.ID,
