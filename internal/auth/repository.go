@@ -2,16 +2,22 @@ package auth
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"strings"
 
 	"github.com/emanuelfelicio/artblogapi/db/dbgen"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type repository struct {
-	query *dbgen.Queries
+	query  *dbgen.Queries
+	logger *slog.Logger
 }
 
-func NewRepository(q *dbgen.Queries) *repository {
-	return &repository{query: q}
+func NewRepository(q *dbgen.Queries, logger *slog.Logger) *repository {
+	return &repository{query: q, logger: logger}
 }
 
 func (r *repository) CreateUser(ctx context.Context, user User) (User, error) {
@@ -23,7 +29,19 @@ func (r *repository) CreateUser(ctx context.Context, user User) (User, error) {
 	}
 	dbUser, err := r.query.CreateUser(ctx, userParam)
 	if err != nil {
-		return User{}, err
+		// Map UNIQUE constraint violation to domain sentinel errors
+		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23505" {
+
+			detail := strings.ToLower(pgErr.Detail)
+			if strings.Contains(detail, "email") {
+				return User{}, ErrEmailAlreadyExists
+			}
+			if strings.Contains(detail, "username") {
+				return User{}, ErrUsernameAlreadyExists
+			}
+		}
+
+		return User{}, fmt.Errorf("create_user %w", err)
 	}
 
 	return User{
@@ -34,10 +52,22 @@ func (r *repository) CreateUser(ctx context.Context, user User) (User, error) {
 	}, nil
 }
 
-func (r *repository) CheckEmailExists(ctx context.Context, email string) (bool, error) {
-	return r.query.CheckEmailExists(ctx, email)
-}
+func (r *repository) CheckEmailAndUsername(ctx context.Context, username, email string) error {
+	row, err := r.query.CheckEmailUsername(ctx, dbgen.CheckEmailUsernameParams{Email: email, Username: username})
 
-func (r *repository) CheckUsernameExists(ctx context.Context, username string) (bool, error) {
-	return r.query.CheckUsernameExists(ctx, username)
+	if err != nil {
+		return fmt.Errorf("check_email_username %w", err)
+	}
+
+	var errs []error
+	if row.EmailExists {
+		errs = append(errs, ErrEmailAlreadyExists)
+	}
+	if row.UsernameExists {
+		errs = append(errs, ErrUsernameAlreadyExists)
+	}
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	return nil
 }

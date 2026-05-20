@@ -16,3 +16,8 @@ SELECT EXISTS(SELECT 1 FROM users WHERE email = $1);
 
 -- name: CheckUsernameExists :one
 SELECT EXISTS(SELECT 1 FROM users WHERE username = $1);
+
+-- name: CheckEmailUsername :one
+SELECT
+    EXISTS(SELECT 1 FROM users u WHERE u.email = $1) AS email_exists,
+    EXISTS(SELECT 1 FROM users u WHERE u.username = $2) AS username_exists;

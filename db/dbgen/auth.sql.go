@@ -22,6 +22,29 @@ func (q *Queries) CheckEmailExists(ctx context.Context, email string) (bool, err
 	return exists, err
 }
 
+const checkEmailUsername = `-- name: CheckEmailUsername :one
+SELECT
+    EXISTS(SELECT 1 FROM users u WHERE u.email = $1) AS email_exists,
+    EXISTS(SELECT 1 FROM users u WHERE u.username = $2) AS username_exists
+`
+
+type CheckEmailUsernameParams struct {
+	Email    string
+	Username string
+}
+
+type CheckEmailUsernameRow struct {
+	EmailExists    bool
+	UsernameExists bool
+}
+
+func (q *Queries) CheckEmailUsername(ctx context.Context, arg CheckEmailUsernameParams) (CheckEmailUsernameRow, error) {
+	row := q.db.QueryRow(ctx, checkEmailUsername, arg.Email, arg.Username)
+	var i CheckEmailUsernameRow
+	err := row.Scan(&i.EmailExists, &i.UsernameExists)
+	return i, err
+}
+
 const checkUsernameExists = `-- name: CheckUsernameExists :one
 SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)
 `

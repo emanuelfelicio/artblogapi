@@ -55,7 +55,7 @@ func main() {
 	queries := dbgen.New(pool)
 
 	// dependencies
-	authRepo := auth.NewRepository(queries)
+	authRepo := auth.NewRepository(queries, logger)
 	jwtIssuer := os.Getenv("JWT_ISSUER")
 	if jwtIssuer == "" {
 		jwtIssuer = "artblogapi"
@@ -67,7 +67,7 @@ func main() {
 		os.Exit(1)
 	}
 	authService := auth.NewService(authRepo, logger, authTokenProvider)
-	authHandler := auth.NewHandler(authService)
+	authHandler := auth.NewHandler(authService, logger)
 
 	if strings.EqualFold(appEnv, "production") {
 		gin.SetMode(gin.ReleaseMode)
