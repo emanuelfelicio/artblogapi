@@ -10,6 +10,7 @@ import (
 	loggercfg "github.com/emanuelfelicio/artblogapi/config/logger"
 	"github.com/emanuelfelicio/artblogapi/db/dbgen"
 	"github.com/emanuelfelicio/artblogapi/internal/auth"
+	"github.com/emanuelfelicio/artblogapi/internal/auth/token"
 	"github.com/emanuelfelicio/artblogapi/internal/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -61,7 +62,8 @@ func main() {
 		jwtIssuer = "artblogapi"
 	}
 	jwtSecret := os.Getenv("JWT_SECRET")
-	authTokenProvider, err := auth.NewJWTTokenProvider([]byte(jwtSecret), jwtIssuer, 24*time.Hour)
+
+	authTokenProvider, err := token.NewJWT([]byte(jwtSecret), jwtIssuer, 24*time.Hour)
 	if err != nil {
 		logger.Error("jwt_provider_config_invalid", slog.String("error", err.Error()))
 		os.Exit(1)

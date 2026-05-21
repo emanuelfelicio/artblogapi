@@ -1,10 +1,11 @@
-package auth
+package token
 
 import (
 	"errors"
 	"strings"
 	"time"
 
+	"github.com/emanuelfelicio/artblogapi/internal/auth"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -12,15 +13,24 @@ var (
 	ErrJWTProviderSecretRequired = errors.New("jwt provider secret is required")
 	ErrJWTProviderIssuerRequired = errors.New("jwt provider issuer is required")
 	ErrJWTProviderTTLInvalid     = errors.New("jwt provider ttl must be greater than zero")
+	ErrInvalidToken              = errors.New("invalid token")
 )
 
-type jwtTokenProvider struct {
+type AccessClaims struct {
+	jwt.RegisteredClaims
+}
+
+type AuthPrincipal struct {
+	UserID string
+}
+
+type JWTTokenService struct {
 	secret []byte
 	issuer string
 	ttl    time.Duration
 }
 
-func NewJWTTokenProvider(secret []byte, issuer string, ttl time.Duration) (*jwtTokenProvider, error) {
+func NewJWT(secret []byte, issuer string, ttl time.Duration) (*JWTTokenService, error) {
 	if len(secret) == 0 {
 		return nil, ErrJWTProviderSecretRequired
 	}
@@ -31,23 +41,35 @@ func NewJWTTokenProvider(secret []byte, issuer string, ttl time.Duration) (*jwtT
 		return nil, ErrJWTProviderTTLInvalid
 	}
 
-	return &jwtTokenProvider{secret: secret, issuer: issuer, ttl: ttl}, nil
+	return &JWTTokenService{secret: secret, issuer: issuer, ttl: ttl}, nil
 }
 
-func (p *jwtTokenProvider) GenerateAccessToken(user User) (string, error) {
+func (p *JWTTokenService) GenerateAccessToken(user auth.User) (string, error) {
 	now := time.Now()
-	claims := jwt.RegisteredClaims{
+	claims := AccessClaims{jwt.RegisteredClaims{
 		Issuer:    p.issuer,
 		Subject:   user.ID.String(),
 		IssuedAt:  jwt.NewNumericDate(now),
 		ExpiresAt: jwt.NewNumericDate(now.Add(p.ttl)),
-	}
+	}}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	return token.SignedString(p.secret)
 }
 
-func (p *jwtTokenProvider) VerifyAccessToken(token string) {
+func (p *JWTTokenService) VerifyAccessToken(token string) (AuthPrincipal, error) {
+	parser := jwt.NewParser(jwt.WithIssuer(p.issuer), jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
+	claims := &AccessClaims{}
+	parsedToken, err := parser.ParseWithClaims(token, claims, func(t *jwt.Token) (any, error) { return p.secret, nil })
 
+	if err != nil {
+		return AuthPrincipal{}, err
+	}
+
+	if parsedToken.Valid == false {
+		return AuthPrincipal{}, ErrInvalidToken
+	}
+
+	return AuthPrincipal{UserID: claims.Subject}, nil
 }
