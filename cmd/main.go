@@ -4,9 +4,8 @@ import (
 	"context"
 	"log/slog"
 	"os"
-	"strings"
-	"time"
 
+	"github.com/emanuelfelicio/artblogapi/config"
 	loggercfg "github.com/emanuelfelicio/artblogapi/config/logger"
 	"github.com/emanuelfelicio/artblogapi/db/dbgen"
 	"github.com/emanuelfelicio/artblogapi/internal/auth"
@@ -14,34 +13,19 @@ import (
 	"github.com/emanuelfelicio/artblogapi/internal/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/joho/godotenv"
 )
 
 func main() {
-	_ = godotenv.Load()
+	cfg := config.LoadConfig()
 
-	appEnv := os.Getenv("APP_ENV")
-	if appEnv == "" {
-		appEnv = "development"
-	}
-	logLevel := os.Getenv("LOG_LEVEL")
-	if logLevel == "" {
-		logLevel = loggercfg.DefaultLevelByEnv(appEnv)
-	}
-
-	logger := loggercfg.New(appEnv, logLevel)
+	logger := loggercfg.New(cfg.AppEnv, cfg.LogLevel)
 	slog.SetDefault(logger)
-	logger.Info("starting_application", slog.String("env", appEnv), slog.String("log_level", logLevel))
+	logger.Info("starting_application", slog.String("env", cfg.AppEnv), slog.String("log_level", cfg.LogLevel))
 
 	// Database configuration
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		logger.Error("missing_environment_variable", slog.String("name", "POSTGRES_CONNECTION"))
-		os.Exit(1)
-	}
 	// init db
 	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, dbURL)
+	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
 		logger.Error("database_connect_failed", slog.String("error", err.Error()))
 		os.Exit(1)
@@ -57,13 +41,8 @@ func main() {
 
 	// dependencies
 	authRepo := auth.NewRepository(queries, logger)
-	jwtIssuer := os.Getenv("JWT_ISSUER")
-	if jwtIssuer == "" {
-		jwtIssuer = "artblogapi"
-	}
-	jwtSecret := os.Getenv("JWT_SECRET")
 
-	authTokenProvider, err := token.NewJWT([]byte(jwtSecret), jwtIssuer, 24*time.Hour)
+	authTokenProvider, err := token.NewJWT([]byte(cfg.JWTSecret), cfg.JWTIssuer, cfg.AccessTokenTTL)
 	if err != nil {
 		logger.Error("jwt_provider_config_invalid", slog.String("error", err.Error()))
 		os.Exit(1)
@@ -71,7 +50,7 @@ func main() {
 	authService := auth.NewService(authRepo, logger, authTokenProvider)
 	authHandler := auth.NewHandler(authService, logger)
 
-	if strings.EqualFold(appEnv, "production") {
+	if cfg.AppEnv == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	} else {
 		gin.SetMode(gin.DebugMode)
@@ -86,13 +65,8 @@ func main() {
 		auth.Routes(v1, authHandler)
 	}
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-
-	logger.Info("server_listening", slog.String("port", port))
-	if err := router.Run(":" + port); err != nil {
+	logger.Info("server_listening", slog.String("port", cfg.Port))
+	if err := router.Run(":" + cfg.Port); err != nil {
 		logger.Error("server_start_failed", slog.String("error", err.Error()))
 		os.Exit(1)
 	}

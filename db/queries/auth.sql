@@ -21,3 +21,8 @@ SELECT EXISTS(SELECT 1 FROM users WHERE username = $1);
 SELECT
     EXISTS(SELECT 1 FROM users u WHERE u.email = $1) AS email_exists,
     EXISTS(SELECT 1 FROM users u WHERE u.username = $2) AS username_exists;
+
+-- name: FindUserByCredential :one
+SELECT * FROM users
+WHERE email = sqlc.arg(credential) OR username = sqlc.arg(credential)
+LIMIT 1;

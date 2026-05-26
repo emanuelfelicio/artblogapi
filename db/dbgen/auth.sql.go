@@ -95,6 +95,31 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const findUserByCredential = `-- name: FindUserByCredential :one
+SELECT id, username, email, password_hash, display_name, bio, avatar_url, banner_url, is_active, created_at, updated_at FROM users
+WHERE email = $1 OR username = $1
+LIMIT 1
+`
+
+func (q *Queries) FindUserByCredential(ctx context.Context, credential string) (User, error) {
+	row := q.db.QueryRow(ctx, findUserByCredential, credential)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Email,
+		&i.PasswordHash,
+		&i.DisplayName,
+		&i.Bio,
+		&i.AvatarUrl,
+		&i.BannerUrl,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT id, username, email, password_hash, display_name, bio, avatar_url, banner_url, is_active, created_at, updated_at FROM users WHERE email = $1 LIMIT 1
 `

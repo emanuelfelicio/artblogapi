@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/emanuelfelicio/artblogapi/db/dbgen"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -30,8 +31,7 @@ func (r *repository) CreateUser(ctx context.Context, user User) (User, error) {
 	dbUser, err := r.query.CreateUser(ctx, userParam)
 	if err != nil {
 		// Map UNIQUE constraint violation to domain sentinel errors
-		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23505" {
-
+		if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
 			detail := strings.ToLower(pgErr.Detail)
 			if strings.Contains(detail, "email") {
 				return User{}, ErrEmailAlreadyExists
@@ -70,4 +70,26 @@ func (r *repository) CheckEmailAndUsername(ctx context.Context, username, email 
 		return errors.Join(errs...)
 	}
 	return nil
+}
+
+func (r *repository) FindUserByCredential(ctx context.Context, credential string) (User, error) {
+	dbUser, err := r.query.FindUserByCredential(ctx, credential)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return User{}, ErrInvalidCredentials
+		}
+
+		return User{}, fmt.Errorf("find_user_by_credential %w", err)
+	}
+
+	return User{
+		ID:           dbUser.ID,
+		Username:     dbUser.Username,
+		Email:        dbUser.Email,
+		PasswordHash: dbUser.PasswordHash,
+		DisplayName:  dbUser.DisplayName.String,
+		AvatarURL:    dbUser.AvatarUrl.String,
+		IsActive:     dbUser.IsActive,
+	}, nil
 }

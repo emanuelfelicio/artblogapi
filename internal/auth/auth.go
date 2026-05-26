@@ -4,13 +4,13 @@ import (
 	"errors"
 
 	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
 )
 
 var (
 	ErrEmailAlreadyExists    = errors.New("email already exists")
 	ErrUsernameAlreadyExists = errors.New("username already exists")
-	ErrInvalidCredentials    = errors.New("invalid email or password")
+	ErrInvalidCredentials    = errors.New("invalid credentials")
+	ErrUserInactive = errors.New("user is inactive")
 )
 
 type User struct {
@@ -28,12 +28,7 @@ type Auth struct {
 	User        User
 }
 
-func NewUser(username, email, rawPassword string) (User, error) {
-	hash, err := bcrypt.GenerateFromPassword([]byte(rawPassword), bcrypt.DefaultCost)
-	if err != nil {
-		return User{}, err
-	}
-
+func NewUser(username, email, passwordHash string) (User, error) {
 	id, err := uuid.NewV7()
 	if err != nil {
 		return User{}, err
@@ -43,7 +38,7 @@ func NewUser(username, email, rawPassword string) (User, error) {
 		ID:           id,
 		Username:     username,
 		Email:        email,
-		PasswordHash: string(hash),
+		PasswordHash: passwordHash,
 		IsActive:     true,
 	}, nil
 }
