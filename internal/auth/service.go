@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -16,6 +17,7 @@ type Repository interface {
 
 type TokenGenerator interface {
 	GenerateAccessToken(user User) (string, error)
+	AccessTokenTTL() time.Duration
 }
 
 type service struct {
@@ -59,7 +61,11 @@ func (s *service) Register(ctx context.Context, username, email, rawPassword str
 	}
 
 	s.logger.Info("auth_register_success", slog.String("user_id", createdUser.ID.String()))
-	return Auth{AccessToken: accessToken, User: createdUser}, nil
+	return Auth{
+		AccessToken: accessToken,
+		TokenType:   "Bearer",
+		ExpiresIn:   int64(s.tokenProvider.AccessTokenTTL().Seconds()),
+	}, nil
 }
 
 func (s *service) Login(ctx context.Context, credential, password string) (Auth, error) {
@@ -80,7 +86,11 @@ func (s *service) Login(ctx context.Context, credential, password string) (Auth,
 	user.PasswordHash = ""
 
 	s.logger.Info("auth_login_success", slog.String("user_id", user.ID.String()))
-	return Auth{AccessToken: accessToken, User: user}, nil
+	return Auth{
+		AccessToken: accessToken,
+		TokenType:   "Bearer",
+		ExpiresIn:   int64(s.tokenProvider.AccessTokenTTL().Seconds()),
+	}, nil
 }
 
 func (s *service) validateCredentials(ctx context.Context, credential, password string) (User, error) {

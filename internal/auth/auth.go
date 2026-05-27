@@ -10,7 +10,7 @@ var (
 	ErrEmailAlreadyExists    = errors.New("email already exists")
 	ErrUsernameAlreadyExists = errors.New("username already exists")
 	ErrInvalidCredentials    = errors.New("invalid credentials")
-	ErrUserInactive = errors.New("user is inactive")
+	ErrUserInactive          = errors.New("user is inactive")
 )
 
 type User struct {
@@ -25,7 +25,8 @@ type User struct {
 
 type Auth struct {
 	AccessToken string
-	User        User
+	TokenType   string
+	ExpiresIn   int64
 }
 
 func NewUser(username, email, passwordHash string) (User, error) {

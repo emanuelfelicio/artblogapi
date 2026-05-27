@@ -58,6 +58,10 @@ func (p *JWTTokenService) GenerateAccessToken(user auth.User) (string, error) {
 	return token.SignedString(p.secret)
 }
 
+func (p *JWTTokenService) AccessTokenTTL() time.Duration {
+	return p.ttl
+}
+
 func (p *JWTTokenService) VerifyAccessToken(token string) (AuthPrincipal, error) {
 	parser := jwt.NewParser(jwt.WithIssuer(p.issuer), jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
 	claims := &AccessClaims{}

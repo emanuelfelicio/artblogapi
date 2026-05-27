@@ -51,11 +51,8 @@ func (h *handler) Register(c *gin.Context) {
 
 	res := RegisterResponse{
 		AccessToken: authResult.AccessToken,
-		User: RegisterUserResponse{
-			ID:       authResult.User.ID.String(),
-			Username: authResult.User.Username,
-			Email:    authResult.User.Email,
-		},
+		TokenType:   authResult.TokenType,
+		ExpiresIn:   authResult.ExpiresIn,
 	}
 
 	response.Success(c, http.StatusCreated, res)
@@ -94,12 +91,8 @@ func (h *handler) Login(c *gin.Context) {
 
 	res := LoginResponse{
 		AccessToken: authResult.AccessToken,
-		User: LoginUserResponse{
-			ID:          authResult.User.ID.String(),
-			Username:    authResult.User.Username,
-			Email:       authResult.User.Email,
-			DisplayName: authResult.User.DisplayName,
-		},
+		TokenType:   authResult.TokenType,
+		ExpiresIn:   authResult.ExpiresIn,
 	}
 
 	response.Success(c, http.StatusOK, res)

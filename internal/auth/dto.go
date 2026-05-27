@@ -9,15 +9,9 @@ type RegisterRequest struct {
 }
 
 type RegisterResponse struct {
-	AccessToken string               `json:"access_token"`
-	User        RegisterUserResponse `json:"user"`
-}
-
-type RegisterUserResponse struct {
-	ID          string `json:"id"`
-	Username    string `json:"username"`
-	Email       string `json:"email"`
-	DisplayName string `json:"display_name,omitempty"`
+	AccessToken string `json:"access_token"`
+	TokenType   string `json:"token_type"`
+	ExpiresIn   int64  `json:"expires_in"`
 }
 
 type LoginRequest struct {
@@ -27,13 +21,7 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
-	AccessToken string            `json:"access_token"`
-	User        LoginUserResponse `json:"user"`
-}
-
-type LoginUserResponse struct {
-	ID          string `json:"id"`
-	Username    string `json:"username"`
-	Email       string `json:"email"`
-	DisplayName string `json:"display_name,omitempty"`
+	AccessToken string `json:"access_token"`
+	TokenType   string `json:"token_type"`
+	ExpiresIn   int64  `json:"expires_in"`
 }
