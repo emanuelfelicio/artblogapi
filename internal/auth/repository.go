@@ -88,8 +88,6 @@ func (r *repository) FindUserByCredential(ctx context.Context, credential string
 		Username:     dbUser.Username,
 		Email:        dbUser.Email,
 		PasswordHash: dbUser.PasswordHash,
-		DisplayName:  dbUser.DisplayName.String,
-		AvatarURL:    dbUser.AvatarUrl.String,
 		IsActive:     dbUser.IsActive,
 	}, nil
 }

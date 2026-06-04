@@ -61,7 +61,7 @@ INSERT INTO users (
     id, username, email, password_hash
 ) VALUES (
     $1, $2, $3, $4
-) RETURNING id, username, email, password_hash, display_name, bio, avatar_url, banner_url, is_active, created_at, updated_at
+) RETURNING id, username, email, is_active
 `
 
 type CreateUserParams struct {
@@ -71,97 +71,110 @@ type CreateUserParams struct {
 	PasswordHash string
 }
 
-func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
+type CreateUserRow struct {
+	ID       uuid.UUID
+	Username string
+	Email    string
+	IsActive bool
+}
+
+func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
 	row := q.db.QueryRow(ctx, createUser,
 		arg.ID,
 		arg.Username,
 		arg.Email,
 		arg.PasswordHash,
 	)
-	var i User
+	var i CreateUserRow
 	err := row.Scan(
 		&i.ID,
 		&i.Username,
 		&i.Email,
-		&i.PasswordHash,
-		&i.DisplayName,
-		&i.Bio,
-		&i.AvatarUrl,
-		&i.BannerUrl,
 		&i.IsActive,
-		&i.CreatedAt,
-		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const findUserByCredential = `-- name: FindUserByCredential :one
-SELECT id, username, email, password_hash, display_name, bio, avatar_url, banner_url, is_active, created_at, updated_at FROM users
+SELECT id, username, email, password_hash, is_active
+FROM users
 WHERE email = $1 OR username = $1
 LIMIT 1
 `
 
-func (q *Queries) FindUserByCredential(ctx context.Context, credential string) (User, error) {
+type FindUserByCredentialRow struct {
+	ID           uuid.UUID
+	Username     string
+	Email        string
+	PasswordHash string
+	IsActive     bool
+}
+
+func (q *Queries) FindUserByCredential(ctx context.Context, credential string) (FindUserByCredentialRow, error) {
 	row := q.db.QueryRow(ctx, findUserByCredential, credential)
-	var i User
+	var i FindUserByCredentialRow
 	err := row.Scan(
 		&i.ID,
 		&i.Username,
 		&i.Email,
 		&i.PasswordHash,
-		&i.DisplayName,
-		&i.Bio,
-		&i.AvatarUrl,
-		&i.BannerUrl,
 		&i.IsActive,
-		&i.CreatedAt,
-		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, username, email, password_hash, display_name, bio, avatar_url, banner_url, is_active, created_at, updated_at FROM users WHERE email = $1 LIMIT 1
+SELECT id, username, email, password_hash, is_active
+FROM users
+WHERE email = $1
+LIMIT 1
 `
 
-func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
+type GetUserByEmailRow struct {
+	ID           uuid.UUID
+	Username     string
+	Email        string
+	PasswordHash string
+	IsActive     bool
+}
+
+func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error) {
 	row := q.db.QueryRow(ctx, getUserByEmail, email)
-	var i User
+	var i GetUserByEmailRow
 	err := row.Scan(
 		&i.ID,
 		&i.Username,
 		&i.Email,
 		&i.PasswordHash,
-		&i.DisplayName,
-		&i.Bio,
-		&i.AvatarUrl,
-		&i.BannerUrl,
 		&i.IsActive,
-		&i.CreatedAt,
-		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, email, password_hash, display_name, bio, avatar_url, banner_url, is_active, created_at, updated_at FROM users WHERE username = $1 LIMIT 1
+SELECT id, username, email, password_hash, is_active
+FROM users
+WHERE username = $1
+LIMIT 1
 `
 
-func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
+type GetUserByUsernameRow struct {
+	ID           uuid.UUID
+	Username     string
+	Email        string
+	PasswordHash string
+	IsActive     bool
+}
+
+func (q *Queries) GetUserByUsername(ctx context.Context, username string) (GetUserByUsernameRow, error) {
 	row := q.db.QueryRow(ctx, getUserByUsername, username)
-	var i User
+	var i GetUserByUsernameRow
 	err := row.Scan(
 		&i.ID,
 		&i.Username,
 		&i.Email,
 		&i.PasswordHash,
-		&i.DisplayName,
-		&i.Bio,
-		&i.AvatarUrl,
-		&i.BannerUrl,
 		&i.IsActive,
-		&i.CreatedAt,
-		&i.UpdatedAt,
 	)
 	return i, err
 }

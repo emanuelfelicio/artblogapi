@@ -97,7 +97,7 @@ func (s *service) validateCredentials(ctx context.Context, credential, password 
 
 	user, err := s.repo.FindUserByCredential(ctx, credential)
 	if err != nil {
-		return User{}, ErrInvalidCredentials
+		return User{}, err
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {

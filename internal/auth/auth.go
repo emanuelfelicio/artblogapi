@@ -18,8 +18,6 @@ type User struct {
 	Username     string
 	Email        string
 	PasswordHash string
-	DisplayName  string
-	AvatarURL    string
 	IsActive     bool
 }
 
