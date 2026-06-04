@@ -12,7 +12,7 @@ import (
 
 const ContextAuthPrincipalKey = "auth.principal"
 
-func Authentication(jwt token.JWTTokenService) gin.HandlerFunc {
+func Authentication(jwt *token.JWTTokenService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		auth := c.GetHeader("Authorization")
 		if auth == "" || !strings.HasPrefix(auth, "Bearer ") {

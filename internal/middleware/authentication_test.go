@@ -33,7 +33,7 @@ func TestAuthentication_MissingHeader(t *testing.T) {
 	}
 
 	r := gin.New()
-	r.GET("/protected", middleware.Authentication(*svc), func(c *gin.Context) {
+	r.GET("/protected", middleware.Authentication(svc), func(c *gin.Context) {
 		c.Header("X-Ran", "1")
 		c.Status(http.StatusOK)
 	})
@@ -59,7 +59,7 @@ func TestAuthentication_InvalidToken(t *testing.T) {
 	}
 
 	r := gin.New()
-	r.GET("/protected", middleware.Authentication(*svc), func(c *gin.Context) {
+	r.GET("/protected", middleware.Authentication(svc), func(c *gin.Context) {
 		c.Header("X-Ran", "1")
 		c.Status(http.StatusOK)
 	})
@@ -94,7 +94,7 @@ func TestAuthentication_Success(t *testing.T) {
 	}
 
 	r := gin.New()
-	r.GET("/protected", middleware.Authentication(*svc), func(c *gin.Context) {
+	r.GET("/protected", middleware.Authentication(svc), func(c *gin.Context) {
 		v, ok := c.Get(middleware.ContextAuthPrincipalKey)
 		if !ok {
 			c.Status(http.StatusInternalServerError)
