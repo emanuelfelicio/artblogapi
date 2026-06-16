@@ -27,9 +27,9 @@ func TestMain(m *testing.M) {
 func TestAuthentication_MissingHeader(t *testing.T) {
 	t.Parallel()
 
-	svc, err := token.NewJWT([]byte(testJWTSecretString), testJWTIssuer, testJWTTTL)
+	svc, err := token.NewTokenProvider([]byte(testJWTSecretString), testJWTIssuer, testJWTTTL, time.Hour)
 	if err != nil {
-		t.Fatalf("NewJWT() error = %v", err)
+		t.Fatalf("NewTokenProvider() error = %v", err)
 	}
 
 	r := gin.New()
@@ -53,9 +53,9 @@ func TestAuthentication_MissingHeader(t *testing.T) {
 func TestAuthentication_InvalidToken(t *testing.T) {
 	t.Parallel()
 
-	svc, err := token.NewJWT([]byte(testJWTSecretString), testJWTIssuer, testJWTTTL)
+	svc, err := token.NewTokenProvider([]byte(testJWTSecretString), testJWTIssuer, testJWTTTL, time.Hour)
 	if err != nil {
-		t.Fatalf("NewJWT() error = %v", err)
+		t.Fatalf("NewTokenProvider() error = %v", err)
 	}
 
 	r := gin.New()
@@ -80,9 +80,9 @@ func TestAuthentication_InvalidToken(t *testing.T) {
 func TestAuthentication_Success(t *testing.T) {
 	t.Parallel()
 
-	svc, err := token.NewJWT([]byte(testJWTSecretString), testJWTIssuer, testJWTTTL)
+	svc, err := token.NewTokenProvider([]byte(testJWTSecretString), testJWTIssuer, testJWTTTL, time.Hour)
 	if err != nil {
-		t.Fatalf("NewJWT() error = %v", err)
+		t.Fatalf("NewTokenProvider() error = %v", err)
 	}
 
 	userID := uuid.New()
@@ -100,7 +100,7 @@ func TestAuthentication_Success(t *testing.T) {
 			c.Status(http.StatusInternalServerError)
 			return
 		}
-		ap, ok := v.(token.AuthPrincipal)
+		ap, ok := v.(auth.AuthPrincipal)
 		if !ok {
 			c.Status(http.StatusInternalServerError)
 			return

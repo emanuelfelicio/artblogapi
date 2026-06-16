@@ -1,16 +1,9 @@
 package auth
 
 import (
-	"errors"
+	"time"
 
 	"github.com/google/uuid"
-)
-
-var (
-	ErrEmailAlreadyExists    = errors.New("email already exists")
-	ErrUsernameAlreadyExists = errors.New("username already exists")
-	ErrInvalidCredentials    = errors.New("invalid credentials")
-	ErrUserInactive          = errors.New("user is inactive")
 )
 
 type User struct {
@@ -22,9 +15,26 @@ type User struct {
 }
 
 type Auth struct {
-	AccessToken string
-	TokenType   string
-	ExpiresIn   int64
+	AccessToken  string
+	RefreshToken string
+	TokenType    string
+	ExpiresIn    int64
+	RefreshTTL   int
+}
+
+type AuthPrincipal struct {
+	UserID string
+}
+
+type Session struct {
+	ID        string
+	UserID    uuid.UUID
+	ExpiresAt time.Time
+	CreatedAt time.Time
+	Revoked   bool
+	UserAgent string
+	IP        string
+	DeviceID  string
 }
 
 func NewUser(username, email, passwordHash string) (User, error) {

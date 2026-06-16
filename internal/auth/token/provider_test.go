@@ -15,15 +15,16 @@ func TestJWT_GenerateAndVerify_Success(t *testing.T) {
 	t.Parallel()
 
 	var (
-		secret = "test-secret"
-		issuer = "artblog"
-		ttl    = time.Hour
-		user   = auth.User{ID: uuid.New()}
+		secret     = "test-secret"
+		issuer     = "artblog"
+		ttl        = time.Hour
+		refreshTTL = 7 * 24 * time.Hour
+		user       = auth.User{ID: uuid.New()}
 	)
 
-	tokenService, err := token.NewJWT([]byte(secret), issuer, ttl)
+	tokenService, err := token.NewTokenProvider([]byte(secret), issuer, ttl, refreshTTL)
 	if err != nil {
-		t.Fatalf("NewJWT() error = %v", err)
+		t.Fatalf("NewTokenProvider() error = %v", err)
 	}
 
 	accessToken, err := tokenService.GenerateAccessToken(user)
@@ -52,9 +53,9 @@ func TestJWT_VerifyAccessToken_Errors(t *testing.T) {
 		issuer = "artblog"
 	)
 
-	tokenService, err := token.NewJWT([]byte(secret), issuer, time.Hour)
+	tokenService, err := token.NewTokenProvider([]byte(secret), issuer, time.Hour, time.Hour*24)
 	if err != nil {
-		t.Fatalf("NewJWT() error = %v", err)
+		t.Fatalf("NewTokenProvider() error = %v", err)
 	}
 
 	tests := []struct {
@@ -65,17 +66,17 @@ func TestJWT_VerifyAccessToken_Errors(t *testing.T) {
 		{
 			name:    "expired token",
 			token:   buildSignedToken(t, secret, jwt.SigningMethodHS256, issuer, time.Now().Add(-time.Hour)),
-			wantErr: jwt.ErrTokenExpired,
+			wantErr: token.ErrInvalidToken,
 		},
 		{
 			name:    "invalid issuer",
 			token:   buildSignedToken(t, secret, jwt.SigningMethodHS256, "other-issuer", time.Now().Add(time.Hour)),
-			wantErr: jwt.ErrTokenInvalidIssuer,
+			wantErr: token.ErrInvalidToken,
 		},
 		{
 			name:    "invalid algorithm",
 			token:   buildSignedToken(t, secret, jwt.SigningMethodHS384, issuer, time.Now().Add(time.Hour)),
-			wantErr: jwt.ErrTokenSignatureInvalid,
+			wantErr: token.ErrInvalidToken,
 		},
 	}
 

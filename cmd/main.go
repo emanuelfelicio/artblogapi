@@ -40,15 +40,16 @@ func main() {
 	queries := dbgen.New(pool)
 
 	// dependencies
-	authRepo := auth.NewRepository(queries, logger)
+	authRepo := auth.NewRepository(queries, logger, pool)
 
-	authTokenProvider, err := token.NewJWT([]byte(cfg.JWTSecret), cfg.JWTIssuer, cfg.AccessTokenTTL)
+	authTokenProvider, err := token.NewTokenProvider([]byte(cfg.JWTSecret), cfg.JWTIssuer, cfg.AccessTokenTTL, cfg.RefreshTokenTTL)
 	if err != nil {
-		logger.Error("jwt_provider_config_invalid", slog.String("error", err.Error()))
+		logger.Error("token_provider_config_invalid", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 	authService := auth.NewService(authRepo, logger, authTokenProvider)
-	authHandler := auth.NewHandler(authService, logger)
+	refreshCookieCfg := auth.NewRefreshCookieConfig(cfg.RefreshCookieDomain, cfg.RefreshCookieSecure)
+	authHandler := auth.NewHandler(authService, logger, refreshCookieCfg)
 
 	if cfg.AppEnv == "production" {
 		gin.SetMode(gin.ReleaseMode)
@@ -60,9 +61,10 @@ func main() {
 	router.Use(gin.Recovery())
 	router.Use(middleware.RequestLogger(logger))
 
+	authMiddleware := middleware.Authentication(authTokenProvider)
 	v1 := router.Group("/api/v1")
 	{
-		auth.Routes(v1, authHandler)
+		auth.Routes(v1, authHandler, authMiddleware)
 	}
 
 	logger.Info("server_listening", slog.String("port", cfg.Port))

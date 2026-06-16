@@ -11,13 +11,16 @@ import (
 )
 
 type Config struct {
-	AppEnv         string
-	LogLevel       string
-	DatabaseURL    string
-	JWTIssuer      string
-	JWTSecret      string
-	Port           string
-	AccessTokenTTL time.Duration
+	AppEnv              string
+	LogLevel            string
+	DatabaseURL         string
+	JWTIssuer           string
+	JWTSecret           string
+	Port                string
+	AccessTokenTTL      time.Duration
+	RefreshTokenTTL     time.Duration
+	RefreshCookieDomain string
+	RefreshCookieSecure bool
 }
 
 func LoadConfig() Config {
@@ -37,13 +40,16 @@ func LoadConfig() Config {
 	}
 
 	return Config{
-		AppEnv:         appEnv,
-		LogLevel:       logLevel,
-		DatabaseURL:    databaseURL,
-		JWTIssuer:      jwtIssuer,
-		JWTSecret:      jwtSecret,
-		Port:           getEnvOrDefault("PORT", "8080"),
-		AccessTokenTTL: 24 * time.Hour,
+		AppEnv:              appEnv,
+		LogLevel:            logLevel,
+		DatabaseURL:         databaseURL,
+		JWTIssuer:           jwtIssuer,
+		JWTSecret:           jwtSecret,
+		Port:                getEnvOrDefault("PORT", "8080"),
+		AccessTokenTTL:      15 * time.Minute,
+		RefreshTokenTTL:     7 * 24 * time.Hour,
+		RefreshCookieDomain: getEnvOrDefault("REFRESH_TOKEN_COOKIE_DOMAIN", ""),
+		RefreshCookieSecure: getEnvOrDefault("REFRESH_TOKEN_COOKIE_SECURE", "false") == "true",
 	}
 }
 

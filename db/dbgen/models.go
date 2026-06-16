@@ -9,6 +9,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Session struct {
+	ID        string
+	UserID    uuid.UUID
+	ExpiresAt pgtype.Timestamptz
+	CreatedAt pgtype.Timestamptz
+	Revoked   bool
+	UserAgent pgtype.Text
+	Ip        pgtype.Text
+	DeviceID  pgtype.Text
+}
+
 type User struct {
 	ID           uuid.UUID
 	Username     string
