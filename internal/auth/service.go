@@ -219,14 +219,14 @@ func (s *service) Refresh(ctx context.Context, refreshToken, userAgent, ip, devi
 	if err != nil {
 		if errors.Is(err, ErrTokenReuse) {
 			if revErr := s.repo.RevokeAllSessionsByUserID(ctx, userID); revErr != nil {
-				return Auth{}, WrapDomainErr(revErr)
+				return Auth{}, revErr
 			}
 			return Auth{}, WrapDomainErr(ErrTokenReuse)
 		}
 
 		if errors.Is(err, ErrDeviceMismatch) {
 			if revErr := s.repo.RevokeSessionByID(ctx, sessionID); revErr != nil {
-				return Auth{}, WrapDomainErr(revErr)
+				return Auth{}, revErr
 			}
 			return Auth{}, WrapDomainErr(ErrDeviceMismatch)
 		}
