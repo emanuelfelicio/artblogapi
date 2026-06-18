@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net"
@@ -23,13 +24,15 @@ type RefreshCookieConfig struct {
 	SameSite http.SameSite
 }
 
-func NewRefreshCookieConfig(domain string, secure bool) RefreshCookieConfig {
-	name := "refresh_token"
-	path := "/"
+const (
+	cookieName = "refresh_token"
+	cookiePath = "/"
+)
 
+func NewRefreshCookieConfig(domain string, secure bool) RefreshCookieConfig {
 	return RefreshCookieConfig{
-		Name:     name,
-		Path:     path,
+		Name:     cookieName,
+		Path:     cookiePath,
 		Domain:   domain,
 		Secure:   secure,
 		HttpOnly: true,
@@ -37,13 +40,20 @@ func NewRefreshCookieConfig(domain string, secure bool) RefreshCookieConfig {
 	}
 }
 
+type AuthService interface {
+	Register(ctx context.Context, username, email, rawPassword, userAgent, ip, deviceID string) (Auth, error)
+	Login(ctx context.Context, credential, password, userAgent, ip, deviceID string) (Auth, error)
+	Refresh(ctx context.Context, refreshToken, userAgent, ip, deviceID string) (Auth, error)
+	Logout(ctx context.Context, refreshToken string, currentUserID uuid.UUID) error
+}
+
 type handler struct {
-	service *service
+	service AuthService
 	logger  *slog.Logger
 	cookie  RefreshCookieConfig
 }
 
-func NewHandler(s *service, l *slog.Logger, cookie RefreshCookieConfig) *handler {
+func NewHandler(s AuthService, l *slog.Logger, cookie RefreshCookieConfig) *handler {
 	return &handler{service: s, logger: l, cookie: cookie}
 }
 
