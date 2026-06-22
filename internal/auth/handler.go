@@ -20,7 +20,7 @@ type RefreshCookieConfig struct {
 	Path     string
 	Domain   string
 	Secure   bool
-	HttpOnly bool
+	HTTPOnly bool
 	SameSite http.SameSite
 }
 
@@ -35,7 +35,7 @@ func NewRefreshCookieConfig(domain string, secure bool) RefreshCookieConfig {
 		Path:     cookiePath,
 		Domain:   domain,
 		Secure:   secure,
-		HttpOnly: true,
+		HTTPOnly: true,
 		SameSite: http.SameSiteNoneMode,
 	}
 }
@@ -224,7 +224,7 @@ func (h *handler) setRefreshTokenCookie(c *gin.Context, token string, ttl int) {
 		h.cookie.Path,
 		h.cookie.Domain,
 		h.cookie.Secure,
-		h.cookie.HttpOnly,
+		h.cookie.HTTPOnly,
 	)
 }
 
@@ -236,7 +236,7 @@ func (h *handler) clearRefreshTokenCookie(c *gin.Context) {
 		h.cookie.Path,
 		h.cookie.Domain,
 		h.cookie.Secure,
-		h.cookie.HttpOnly,
+		h.cookie.HTTPOnly,
 	)
 }
 

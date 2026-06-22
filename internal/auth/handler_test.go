@@ -219,7 +219,7 @@ func TestHandler_Login(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		payload        interface{}
+		payload        any
 		setupMock      func(s *stubAuthService)
 		expectedStatus int
 		verifyResponse func(t *testing.T, w *httptest.ResponseRecorder)
