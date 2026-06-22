@@ -1,39 +1,58 @@
 
 
-.PHONY: help docker-up migrate-up migrate-create generate run run-dev run-prod build fmt sqlc-diff
+## help: print this help message
+.PHONY: help
+help:
+	@echo 'Usage:'
+	@sed -n 's/^##//p' ${MAKEFILE_LIST} | column -t -s ':' |  sed -e 's/^/ /'
 
-help: ## Exibe este help
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
-
-fmt: ## Formata o código Go
-	@echo "Formatando arquivos Go..."
-	go fmt ./...
-
-build: fmt ## Compila a aplicação Go
-	@echo "Compilando binário..."
+## build: build go aplication
+.PHONY: build
+build: 
 	go build -o bin/api cmd/main.go
 
-docker-up: ## Inicia o banco de dados (Postgres)
-	docker-compose up -d
-
-migrate-up: ## Aplica as migrações no banco de dados
-	goose up
-
-migrate-create: ## Cria uma nova migração (ex: make migrate-create NAME=add_users)
+## migrate-create: Creates a new migration (e.g., make migrate-create NAME=add_users)
+.PHONY: migrate-create
+migrate-create:
 	@if [ -z "$(NAME)" ]; then echo "Erro: use 'make migrate-create NAME=nome_da_migracao'"; exit 1; fi
 	goose -s create $(NAME) sql
-
-generate: ## Gera o código Go a partir do SQL (SQLC)
-	sqlc generate -f db/sqlc.yaml
-
-sqlc-diff: ## Compara o schema com as queries (SQLC)
+## sqlc-diff: Compare the schema with the queries (SQLC)
+.PHONY: sqlc-diff
+sqlc-diff:
 	sqlc diff -f db/sqlc.yaml
 
-run: build ## Compila e executa a aplicação
+## sqlc-gen: generete sqlc code
+sqlc-gen:
+	sqlc generate -f db/sqlc.yaml
+
+# run: run the aplication
+.PHONY: build
+run: build 
 	./bin/api
 
-run-dev: build ## Executa em desenvolvimento com logs em texto
-	APP_ENV=development LOG_LEVEL=INFO ./bin/api
+## tidy: tidy modfiles and modernize and format .go files
+.PHONY: tidy
+tidy:
+	go mod tidy -v
+	go fix ./...
+	go fmt ./...
 
-run-prod: build ## Executa em produção com logs em JSON
-	APP_ENV=production LOG_LEVEL=WARN ./bin/api
+.PHONY: test
+test:
+	go test -v -race -buildvcs ./...
+
+## audit: run quality control checks
+.PHONY: audit
+audit: test sqlc-diff
+	sqlc vet -f db/sqlc.yaml
+	go mod tidy -diff
+	go mod verify
+	test -z "$(shell gofmt -l .)" 
+	go vet ./...
+	go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+
+## test/cover: run all tests and display coverage
+.PHONY: test/cover
+test/cover:
+	go test -v -race -buildvcs -coverprofile=/tmp/coverage.out ./...
+	go tool cover -html=/tmp/coverage.out
