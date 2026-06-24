@@ -57,6 +57,19 @@ func NewHandler(s AuthService, l *slog.Logger, cookie RefreshCookieConfig) *hand
 	return &handler{service: s, logger: l, cookie: cookie}
 }
 
+// Register godoc
+//
+//	@Summary		Register a new user
+//	@Description	Creates a new user account
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		RegisterRequest	true	"Register request"
+//	@Success		201		{object}	response.Response
+//	@Failure		400		{object}	response.Response
+//	@Failure		409		{object}	response.Response
+//	@Failure		500		{object}	response.Response
+//	@Router			/auth/register [post]
 func (h *handler) Register(c *gin.Context) {
 	var req RegisterRequest
 

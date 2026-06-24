@@ -1,0 +1,98 @@
+basePath: /api/v1
+definitions:
+  auth.RegisterRequest:
+    properties:
+      email:
+        example: john.doe@email.com
+        maxLength: 255
+        type: string
+      password:
+        description: Password max length of 72 bytes is due to bcrypt's maximum password
+          length limitation.
+        example: StrongP@ssw0rd!
+        minLength: 8
+        type: string
+      username:
+        description: Username accepts only lowercase alphanumeric characters, dots,
+          and underscores.
+        example: john_doe
+        maxLength: 30
+        minLength: 3
+        type: string
+    required:
+    - email
+    - password
+    - username
+    type: object
+  response.ErrorCode:
+    enum:
+    - PARSE_ERROR
+    - VALIDATION_ERROR
+    - CONFLICT_ERROR
+    - UNAUTHORIZED
+    - FORBIDDEN
+    - INTERNAL_SERVER_ERROR
+    type: string
+    x-enum-varnames:
+    - ParseCode
+    - ValidationCode
+    - ConflictCode
+    - UnauthorizedCode
+    - ForbiddenCode
+    - InternalServerCode
+  response.ErrorInfo:
+    properties:
+      code:
+        $ref: '#/definitions/response.ErrorCode'
+      details: {}
+      message:
+        type: string
+    type: object
+  response.Response:
+    properties:
+      data: {}
+      error:
+        $ref: '#/definitions/response.ErrorInfo'
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: Social media API for posts, authentication, and feed management
+  title: Artblog API
+  version: "1.0"
+paths:
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new user account
+      parameters:
+      - description: Register request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: Register a new user
+      tags:
+      - auth
+swagger: "2.0"

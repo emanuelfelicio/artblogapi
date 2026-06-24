@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 
+	_ "github.com/emanuelfelicio/artblogapi/cmd/docs"
 	"github.com/emanuelfelicio/artblogapi/config"
 	loggercfg "github.com/emanuelfelicio/artblogapi/config/logger"
 	"github.com/emanuelfelicio/artblogapi/db/dbgen"
@@ -13,15 +14,21 @@ import (
 	"github.com/emanuelfelicio/artblogapi/internal/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
+	swaggerfiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
+// @title			Artblog API
+// @version		1.0
+// @description	Social media API for posts, authentication, and feed management
+// @host			localhost:8080
+// @BasePath		/api/v1
 func main() {
 	cfg := config.LoadConfig()
 
 	logger := loggercfg.New(cfg.AppEnv, cfg.LogLevel)
 	slog.SetDefault(logger)
 	logger.Info("starting_application", slog.String("env", cfg.AppEnv), slog.String("log_level", cfg.LogLevel))
-
 	// Database configuration
 	// init db
 	ctx := context.Background()
@@ -66,6 +73,7 @@ func main() {
 	{
 		auth.Routes(v1, authHandler, authMiddleware)
 	}
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
 
 	logger.Info("server_listening", slog.String("port", cfg.Port))
 	if err := router.Run(":" + cfg.Port); err != nil {
