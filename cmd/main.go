@@ -18,11 +18,14 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
-// @title			Artblog API
-// @version		1.0
-// @description	Social media API for posts, authentication, and feed management
-// @host			localhost:8080
-// @BasePath		/api/v1
+// @title						Artblog API
+// @version					1.0
+// @description				Social media API for posts, authentication, and feed management
+// @host						localhost:8080
+// @BasePath					/api/v1
+// @securityDefinitions.apikey	BearerAuth
+// @in							header
+// @name						Authorization
 func main() {
 	cfg := config.LoadConfig()
 

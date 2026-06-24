@@ -17,7 +17,7 @@ func Authentication(provider *token.TokenProvider) gin.HandlerFunc {
 		auth := c.GetHeader("Authorization")
 		if auth == "" || !strings.HasPrefix(auth, "Bearer ") {
 			err := fmt.Errorf("missing authorization header")
-			response.Fail(c, http.StatusUnauthorized, response.UnauthorizedCode, err.Error(), nil)
+			response.Fail(c, http.StatusUnauthorized, response.UnauthorizedCode, err.Error())
 			c.Error(err)
 			c.Abort()
 			return
@@ -27,7 +27,7 @@ func Authentication(provider *token.TokenProvider) gin.HandlerFunc {
 
 		principal, err := provider.VerifyAccessToken(raw)
 		if err != nil {
-			response.Fail(c, http.StatusUnauthorized, response.UnauthorizedCode, "invalid token", nil)
+			response.Fail(c, http.StatusUnauthorized, response.UnauthorizedCode, "invalid token")
 			c.Abort()
 			return
 		}

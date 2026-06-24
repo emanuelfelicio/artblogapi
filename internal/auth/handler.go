@@ -30,13 +30,21 @@ const (
 )
 
 func NewRefreshCookieConfig(domain string, secure bool) RefreshCookieConfig {
+
+	var sameSite http.SameSite
+	if secure {
+		sameSite = http.SameSiteNoneMode
+	} else {
+		sameSite = http.SameSiteLaxMode
+	}
+
 	return RefreshCookieConfig{
 		Name:     cookieName,
 		Path:     cookiePath,
 		Domain:   domain,
 		Secure:   secure,
 		HTTPOnly: true,
-		SameSite: http.SameSiteNoneMode,
+		SameSite: sameSite,
 	}
 }
 
@@ -65,10 +73,10 @@ func NewHandler(s AuthService, l *slog.Logger, cookie RefreshCookieConfig) *hand
 //	@Accept			json
 //	@Produce		json
 //	@Param			request	body		RegisterRequest	true	"Register request"
-//	@Success		201		{object}	response.Response
-//	@Failure		400		{object}	response.Response
-//	@Failure		409		{object}	response.Response
-//	@Failure		500		{object}	response.Response
+//	@Success		201		{object}	response.Response[RegisterResponse]
+//	@Failure		400		{object}	response.ErrorResponse[[]validation.FieldError]
+//	@Failure		409		{object}	response.ErrorResponse[map[string]bool]
+//	@Failure		500		{object}	response.ErrorResponse[any]
 //	@Router			/auth/register [post]
 func (h *handler) Register(c *gin.Context) {
 	var req RegisterRequest
@@ -78,7 +86,7 @@ func (h *handler) Register(c *gin.Context) {
 			fieldErrors := validation.ToFieldError(validationErr)
 			response.ValidationFail(c, fieldErrors)
 		} else {
-			response.Fail(c, http.StatusBadRequest, response.ParseCode, "invalid request body", nil)
+			response.Fail(c, http.StatusBadRequest, response.ParseCode, "invalid request body")
 		}
 		return
 	}
@@ -91,14 +99,14 @@ func (h *handler) Register(c *gin.Context) {
 	authResult, err := h.service.Register(reqCtx, req.Username, req.Email, req.Password, userAgent, ip, deviceID)
 	if err != nil {
 		if e, u := errors.Is(err, ErrEmailAlreadyExists), errors.Is(err, ErrUsernameAlreadyExists); e || u {
-			response.Fail(c, http.StatusConflict, response.ConflictCode, "registration conflict", map[string]bool{
+			response.FailWithDetails(c, http.StatusConflict, response.ConflictCode, "registration conflict", map[string]bool{
 				"email_exists":    e,
 				"username_exists": u,
 			})
 
 		} else {
 			h.logger.Error("request_failed", slog.Any("erro", err))
-			response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "error trying to register user", nil)
+			response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "error trying to register user")
 		}
 		return
 	}
@@ -114,6 +122,20 @@ func (h *handler) Register(c *gin.Context) {
 	response.Success(c, http.StatusCreated, res)
 }
 
+// Login godoc
+//
+//	@Summary		User Login
+//	@Description	Authenticates user credentials and returns an access token, setting a refresh token cookie.
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		LoginRequest	true	"Login request"
+//	@Success		200		{object}	response.Response[LoginResponse]
+//	@Failure		400		{object}	response.ErrorResponse[[]validation.FieldError]
+//	@Failure		401		{object}	response.ErrorResponse[any]
+//	@Failure		403		{object}	response.ErrorResponse[any]
+//	@Failure		500		{object}	response.ErrorResponse[any]
+//	@Router			/auth/login [post]
 func (h *handler) Login(c *gin.Context) {
 	var req LoginRequest
 
@@ -122,7 +144,7 @@ func (h *handler) Login(c *gin.Context) {
 			fieldErrors := validation.ToFieldError(validationErr)
 			response.ValidationFail(c, fieldErrors)
 		} else {
-			response.Fail(c, http.StatusBadRequest, response.ParseCode, "invalid request body", nil)
+			response.Fail(c, http.StatusBadRequest, response.ParseCode, "invalid request body")
 		}
 		return
 	}
@@ -135,17 +157,17 @@ func (h *handler) Login(c *gin.Context) {
 	authResult, err := h.service.Login(reqCtx, req.Credential, req.Password, userAgent, ip, deviceID)
 	if err != nil {
 		if errors.Is(err, ErrInvalidCredentials) {
-			response.Fail(c, http.StatusUnauthorized, response.UnauthorizedCode, "invalid credentials", nil)
+			response.Fail(c, http.StatusUnauthorized, response.UnauthorizedCode, "invalid credentials")
 			return
 		}
 
 		if errors.Is(err, ErrUserInactive) {
-			response.Fail(c, http.StatusForbidden, response.ForbiddenCode, "user inactive", nil)
+			response.Fail(c, http.StatusForbidden, response.ForbiddenCode, "user inactive")
 			return
 		}
 
 		h.logger.Error("request_failed", slog.Any("err", err))
-		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "error trying to login user", nil)
+		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "error trying to login user")
 		return
 	}
 
@@ -160,10 +182,21 @@ func (h *handler) Login(c *gin.Context) {
 	response.Success(c, http.StatusOK, res)
 }
 
+// Refresh godoc
+//
+//	@Summary		Refresh Access Token
+//	@Description	Rotates the refresh token cookie and issues a new access token.
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	response.Response[LoginResponse]
+//	@Failure		401	{object}	response.ErrorResponse[any]
+//	@Failure		500	{object}	response.ErrorResponse[any]
+//	@Router			/auth/refresh [post]
 func (h *handler) Refresh(c *gin.Context) {
 	refreshToken, err := c.Cookie(h.cookie.Name)
 	if err != nil {
-		response.Fail(c, http.StatusUnauthorized, response.UnauthorizedCode, "unauthorized", nil)
+		response.Fail(c, http.StatusUnauthorized, response.UnauthorizedCode, "unauthorized")
 		return
 	}
 
@@ -175,12 +208,12 @@ func (h *handler) Refresh(c *gin.Context) {
 	authResult, err := h.service.Refresh(reqCtx, refreshToken, userAgent, ip, deviceID)
 	if err != nil {
 		if IsDomainErr(err) {
-			response.Fail(c, http.StatusUnauthorized, response.UnauthorizedCode, "unauthorized", nil)
+			response.Fail(c, http.StatusUnauthorized, response.UnauthorizedCode, "unauthorized")
 			return
 		}
 
 		h.logger.Error("request_failed", slog.Any("err", err))
-		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "error trying to refresh token", nil)
+		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "error trying to refresh token")
 		return
 	}
 
@@ -195,26 +228,36 @@ func (h *handler) Refresh(c *gin.Context) {
 	response.Success(c, http.StatusOK, res)
 }
 
+// Logout godoc
+//
+//	@Summary		User Logout
+//	@Description	Revokes the active session and clears the refresh token cookie.
+//	@Tags			auth
+//	@Security		BearerAuth
+//	@Success		204	"No Content"
+//	@Failure		401	{object}	response.ErrorResponse[any]
+//	@Failure		500	{object}	response.ErrorResponse[any]
+//	@Router			/auth/logout [post]
 func (h *handler) Logout(c *gin.Context) {
 	refreshToken, _ := c.Cookie(h.cookie.Name)
 
 	principalAny, exists := c.Get("auth.principal")
 	if !exists {
-		response.Fail(c, http.StatusUnauthorized, response.UnauthorizedCode, "unauthorized", nil)
+		response.Fail(c, http.StatusUnauthorized, response.UnauthorizedCode, "unauthorized")
 		return
 	}
 
 	principal, ok := principalAny.(AuthPrincipal)
 	if !ok {
 		h.logger.Error("logout_failed_invalid_principal", slog.Any("principal", principalAny))
-		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "error trying to logout", nil)
+		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "error trying to logout")
 		return
 	}
 
 	userID, err := uuid.Parse(principal.UserID)
 	if err != nil {
 		h.logger.Error("logout_failed_invalid_uuid", slog.String("user_id", principal.UserID))
-		response.Fail(c, http.StatusUnauthorized, response.UnauthorizedCode, "invalid token", nil)
+		response.Fail(c, http.StatusUnauthorized, response.UnauthorizedCode, "invalid token")
 		return
 	}
 
@@ -225,7 +268,7 @@ func (h *handler) Logout(c *gin.Context) {
 	}
 
 	h.clearRefreshTokenCookie(c)
-	response.Success(c, http.StatusNoContent, nil)
+	response.SuccessNoContent(c, http.StatusNoContent)
 }
 
 func (h *handler) setRefreshTokenCookie(c *gin.Context, token string, ttl int) {
