@@ -1,6 +1,6 @@
 basePath: /api/v1
 definitions:
-  github_com_emanuelfelicio_artblogapi_config_response.ErrorCode:
+  ErrorCode:
     enum:
     - PARSE_ERROR
     - VALIDATION_ERROR
@@ -16,67 +16,57 @@ definitions:
     - UnauthorizedCode
     - ForbiddenCode
     - InternalServerCode
-  github_com_emanuelfelicio_artblogapi_config_response.ErrorInfo-any:
+  ErrorInfo-any:
     properties:
       code:
-        $ref: '#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorCode'
+        $ref: '#/definitions/ErrorCode'
       details: {}
       message:
         type: string
     type: object
-  ? github_com_emanuelfelicio_artblogapi_config_response.ErrorInfo-array_github_com_emanuelfelicio_artblogapi_config_validation_FieldError
-  : properties:
+  ErrorInfo-array_github_com_emanuelfelicio_artblogapi_config_validation_FieldError:
+    properties:
       code:
-        $ref: '#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorCode'
+        $ref: '#/definitions/ErrorCode'
       details:
         items:
-          $ref: '#/definitions/github_com_emanuelfelicio_artblogapi_config_validation.FieldError'
+          $ref: '#/definitions/FieldError'
         type: array
       message:
         type: string
     type: object
-  github_com_emanuelfelicio_artblogapi_config_response.ErrorInfo-map_string_bool:
+  ErrorInfo-map_string_bool:
     properties:
       code:
-        $ref: '#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorCode'
+        $ref: '#/definitions/ErrorCode'
       details:
         $ref: '#/definitions/map_string_bool'
       message:
         type: string
     type: object
-  github_com_emanuelfelicio_artblogapi_config_response.ErrorResponse-any:
+  ErrorResponse-any:
     properties:
       error:
-        $ref: '#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorInfo-any'
+        $ref: '#/definitions/ErrorInfo-any'
     type: object
-  ? github_com_emanuelfelicio_artblogapi_config_response.ErrorResponse-array_github_com_emanuelfelicio_artblogapi_config_validation_FieldError
-  : properties:
-      error:
-        $ref: '#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorInfo-array_github_com_emanuelfelicio_artblogapi_config_validation_FieldError'
-    type: object
-  github_com_emanuelfelicio_artblogapi_config_response.ErrorResponse-map_string_bool:
+  ErrorResponse-array_github_com_emanuelfelicio_artblogapi_config_validation_FieldError:
     properties:
       error:
-        $ref: '#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorInfo-map_string_bool'
+        $ref: '#/definitions/ErrorInfo-array_github_com_emanuelfelicio_artblogapi_config_validation_FieldError'
     type: object
-  github_com_emanuelfelicio_artblogapi_config_response.Response-internal_auth_LoginResponse:
+  ErrorResponse-map_string_bool:
     properties:
-      data:
-        $ref: '#/definitions/internal_auth.LoginResponse'
+      error:
+        $ref: '#/definitions/ErrorInfo-map_string_bool'
     type: object
-  github_com_emanuelfelicio_artblogapi_config_response.Response-internal_auth_RegisterResponse:
-    properties:
-      data:
-        $ref: '#/definitions/internal_auth.RegisterResponse'
-    type: object
-  github_com_emanuelfelicio_artblogapi_config_validation.FieldError:
+  FieldError:
     properties:
       field:
         type: string
       message:
         type: string
     type: object
-  internal_auth.LoginRequest:
+  LoginRequest:
     properties:
       credential:
         description: Credential accepts email or username.
@@ -92,7 +82,7 @@ definitions:
     - credential
     - password
     type: object
-  internal_auth.LoginResponse:
+  LoginResponse:
     properties:
       access_token:
         example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMTIzNDU2NzgtMTIzNC0xMjM0LTEyMzQtMTIzNDU2Nzg5MDEyIiwiZXhwIjoxNzE5Mjc4NjAwfQ.signature
@@ -104,7 +94,7 @@ definitions:
         example: Bearer
         type: string
     type: object
-  internal_auth.RegisterRequest:
+  RegisterRequest:
     properties:
       email:
         example: john.doe@email.com
@@ -128,7 +118,7 @@ definitions:
     - password
     - username
     type: object
-  internal_auth.RegisterResponse:
+  RegisterResponse:
     properties:
       access_token:
         example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMTIzNDU2NzgtMTIzNC0xMjM0LTEyMzQtMTIzNDU2Nzg5MDEyIiwiZXhwIjoxNzE5Mjc4NjAwfQ.signature
@@ -139,6 +129,16 @@ definitions:
       token_type:
         example: Bearer
         type: string
+    type: object
+  Response-internal_auth_LoginResponse:
+    properties:
+      data:
+        $ref: '#/definitions/LoginResponse'
+    type: object
+  Response-internal_auth_RegisterResponse:
+    properties:
+      data:
+        $ref: '#/definitions/RegisterResponse'
     type: object
   map_string_bool:
     additionalProperties:
@@ -163,30 +163,30 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/internal_auth.LoginRequest'
+          $ref: '#/definitions/LoginRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_emanuelfelicio_artblogapi_config_response.Response-internal_auth_LoginResponse'
+            $ref: '#/definitions/Response-internal_auth_LoginResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorResponse-array_github_com_emanuelfelicio_artblogapi_config_validation_FieldError'
+            $ref: '#/definitions/ErrorResponse-array_github_com_emanuelfelicio_artblogapi_config_validation_FieldError'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorResponse-any'
+            $ref: '#/definitions/ErrorResponse-any'
         "403":
           description: Forbidden
           schema:
-            $ref: '#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorResponse-any'
+            $ref: '#/definitions/ErrorResponse-any'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorResponse-any'
+            $ref: '#/definitions/ErrorResponse-any'
       summary: User Login
       tags:
       - auth
@@ -199,11 +199,11 @@ paths:
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorResponse-any'
+            $ref: '#/definitions/ErrorResponse-any'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorResponse-any'
+            $ref: '#/definitions/ErrorResponse-any'
       security:
       - BearerAuth: []
       summary: User Logout
@@ -220,15 +220,15 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/github_com_emanuelfelicio_artblogapi_config_response.Response-internal_auth_LoginResponse'
+            $ref: '#/definitions/Response-internal_auth_LoginResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorResponse-any'
+            $ref: '#/definitions/ErrorResponse-any'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorResponse-any'
+            $ref: '#/definitions/ErrorResponse-any'
       summary: Refresh Access Token
       tags:
       - auth
@@ -243,26 +243,26 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/internal_auth.RegisterRequest'
+          $ref: '#/definitions/RegisterRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/github_com_emanuelfelicio_artblogapi_config_response.Response-internal_auth_RegisterResponse'
+            $ref: '#/definitions/Response-internal_auth_RegisterResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorResponse-array_github_com_emanuelfelicio_artblogapi_config_validation_FieldError'
+            $ref: '#/definitions/ErrorResponse-array_github_com_emanuelfelicio_artblogapi_config_validation_FieldError'
         "409":
           description: Conflict
           schema:
-            $ref: '#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorResponse-map_string_bool'
+            $ref: '#/definitions/ErrorResponse-map_string_bool'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorResponse-any'
+            $ref: '#/definitions/ErrorResponse-any'
       summary: Register a new user
       tags:
       - auth

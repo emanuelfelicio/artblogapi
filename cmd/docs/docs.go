@@ -35,7 +35,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_auth.LoginRequest"
+                            "$ref": "#/definitions/LoginRequest"
                         }
                     }
                 ],
@@ -43,31 +43,31 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_emanuelfelicio_artblogapi_config_response.Response-internal_auth_LoginResponse"
+                            "$ref": "#/definitions/Response-internal_auth_LoginResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorResponse-array_github_com_emanuelfelicio_artblogapi_config_validation_FieldError"
+                            "$ref": "#/definitions/ErrorResponse-array_github_com_emanuelfelicio_artblogapi_config_validation_FieldError"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorResponse-any"
+                            "$ref": "#/definitions/ErrorResponse-any"
                         }
                     },
                     "403": {
                         "description": "Forbidden",
                         "schema": {
-                            "$ref": "#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorResponse-any"
+                            "$ref": "#/definitions/ErrorResponse-any"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorResponse-any"
+                            "$ref": "#/definitions/ErrorResponse-any"
                         }
                     }
                 }
@@ -92,13 +92,13 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorResponse-any"
+                            "$ref": "#/definitions/ErrorResponse-any"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorResponse-any"
+                            "$ref": "#/definitions/ErrorResponse-any"
                         }
                     }
                 }
@@ -121,19 +121,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/github_com_emanuelfelicio_artblogapi_config_response.Response-internal_auth_LoginResponse"
+                            "$ref": "#/definitions/Response-internal_auth_LoginResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorResponse-any"
+                            "$ref": "#/definitions/ErrorResponse-any"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorResponse-any"
+                            "$ref": "#/definitions/ErrorResponse-any"
                         }
                     }
                 }
@@ -159,7 +159,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_auth.RegisterRequest"
+                            "$ref": "#/definitions/RegisterRequest"
                         }
                     }
                 ],
@@ -167,25 +167,25 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/github_com_emanuelfelicio_artblogapi_config_response.Response-internal_auth_RegisterResponse"
+                            "$ref": "#/definitions/Response-internal_auth_RegisterResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorResponse-array_github_com_emanuelfelicio_artblogapi_config_validation_FieldError"
+                            "$ref": "#/definitions/ErrorResponse-array_github_com_emanuelfelicio_artblogapi_config_validation_FieldError"
                         }
                     },
                     "409": {
                         "description": "Conflict",
                         "schema": {
-                            "$ref": "#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorResponse-map_string_bool"
+                            "$ref": "#/definitions/ErrorResponse-map_string_bool"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorResponse-any"
+                            "$ref": "#/definitions/ErrorResponse-any"
                         }
                     }
                 }
@@ -193,7 +193,7 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "github_com_emanuelfelicio_artblogapi_config_response.ErrorCode": {
+        "ErrorCode": {
             "type": "string",
             "enum": [
                 "PARSE_ERROR",
@@ -212,11 +212,11 @@ const docTemplate = `{
                 "InternalServerCode"
             ]
         },
-        "github_com_emanuelfelicio_artblogapi_config_response.ErrorInfo-any": {
+        "ErrorInfo-any": {
             "type": "object",
             "properties": {
                 "code": {
-                    "$ref": "#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorCode"
+                    "$ref": "#/definitions/ErrorCode"
                 },
                 "details": {},
                 "message": {
@@ -224,16 +224,16 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_emanuelfelicio_artblogapi_config_response.ErrorInfo-array_github_com_emanuelfelicio_artblogapi_config_validation_FieldError": {
+        "ErrorInfo-array_github_com_emanuelfelicio_artblogapi_config_validation_FieldError": {
             "type": "object",
             "properties": {
                 "code": {
-                    "$ref": "#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorCode"
+                    "$ref": "#/definitions/ErrorCode"
                 },
                 "details": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/github_com_emanuelfelicio_artblogapi_config_validation.FieldError"
+                        "$ref": "#/definitions/FieldError"
                     }
                 },
                 "message": {
@@ -241,11 +241,11 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_emanuelfelicio_artblogapi_config_response.ErrorInfo-map_string_bool": {
+        "ErrorInfo-map_string_bool": {
             "type": "object",
             "properties": {
                 "code": {
-                    "$ref": "#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorCode"
+                    "$ref": "#/definitions/ErrorCode"
                 },
                 "details": {
                     "$ref": "#/definitions/map_string_bool"
@@ -255,47 +255,31 @@ const docTemplate = `{
                 }
             }
         },
-        "github_com_emanuelfelicio_artblogapi_config_response.ErrorResponse-any": {
+        "ErrorResponse-any": {
             "type": "object",
             "properties": {
                 "error": {
-                    "$ref": "#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorInfo-any"
+                    "$ref": "#/definitions/ErrorInfo-any"
                 }
             }
         },
-        "github_com_emanuelfelicio_artblogapi_config_response.ErrorResponse-array_github_com_emanuelfelicio_artblogapi_config_validation_FieldError": {
+        "ErrorResponse-array_github_com_emanuelfelicio_artblogapi_config_validation_FieldError": {
             "type": "object",
             "properties": {
                 "error": {
-                    "$ref": "#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorInfo-array_github_com_emanuelfelicio_artblogapi_config_validation_FieldError"
+                    "$ref": "#/definitions/ErrorInfo-array_github_com_emanuelfelicio_artblogapi_config_validation_FieldError"
                 }
             }
         },
-        "github_com_emanuelfelicio_artblogapi_config_response.ErrorResponse-map_string_bool": {
+        "ErrorResponse-map_string_bool": {
             "type": "object",
             "properties": {
                 "error": {
-                    "$ref": "#/definitions/github_com_emanuelfelicio_artblogapi_config_response.ErrorInfo-map_string_bool"
+                    "$ref": "#/definitions/ErrorInfo-map_string_bool"
                 }
             }
         },
-        "github_com_emanuelfelicio_artblogapi_config_response.Response-internal_auth_LoginResponse": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_auth.LoginResponse"
-                }
-            }
-        },
-        "github_com_emanuelfelicio_artblogapi_config_response.Response-internal_auth_RegisterResponse": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/internal_auth.RegisterResponse"
-                }
-            }
-        },
-        "github_com_emanuelfelicio_artblogapi_config_validation.FieldError": {
+        "FieldError": {
             "type": "object",
             "properties": {
                 "field": {
@@ -306,7 +290,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_auth.LoginRequest": {
+        "LoginRequest": {
             "type": "object",
             "required": [
                 "credential",
@@ -327,7 +311,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_auth.LoginResponse": {
+        "LoginResponse": {
             "type": "object",
             "properties": {
                 "access_token": {
@@ -344,7 +328,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_auth.RegisterRequest": {
+        "RegisterRequest": {
             "type": "object",
             "required": [
                 "email",
@@ -372,7 +356,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_auth.RegisterResponse": {
+        "RegisterResponse": {
             "type": "object",
             "properties": {
                 "access_token": {
@@ -386,6 +370,22 @@ const docTemplate = `{
                 "token_type": {
                     "type": "string",
                     "example": "Bearer"
+                }
+            }
+        },
+        "Response-internal_auth_LoginResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/LoginResponse"
+                }
+            }
+        },
+        "Response-internal_auth_RegisterResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/RegisterResponse"
                 }
             }
         },
