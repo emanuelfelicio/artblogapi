@@ -49,10 +49,18 @@ audit: test sqlc-diff
 	go mod verify
 	test -z "$(shell gofmt -l .)" 
 	go vet ./...
-	go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+	go run honnef.co/go/tools/cmd/staticcheck@latest -checks=all,-ST1000,-U1000 ./...
 
 ## test/cover: run all tests and display coverage
 .PHONY: test/cover
 test/cover:
 	go test -v -race -buildvcs -coverprofile=/tmp/coverage.out ./...
 	go tool cover -html=/tmp/coverage.out
+
+.PHONY: swag/init
+swag/init:
+	go run github.com/swaggo/swag/cmd/swag@v1.16.6 init -g ./cmd/main.go -o ./cmd/docs --pd --st -q
+
+.PHONY: swag/fmt
+swag/fmt: 
+	go run github.com/swaggo/swag/cmd/swag@v1.16.6 fmt
