@@ -31,6 +31,12 @@
                         "schema": {
                             "$ref": "#/definitions/LoginRequest"
                         }
+                    },
+                    {
+                        "type": "string",
+                        "description": "Device ID",
+                        "name": "X-Device-ID",
+                        "in": "header"
                     }
                 ],
                 "responses": {
@@ -111,6 +117,14 @@
                     "auth"
                 ],
                 "summary": "Refresh Access Token",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Device ID",
+                        "name": "X-Device-ID",
+                        "in": "header"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -155,6 +169,12 @@
                         "schema": {
                             "$ref": "#/definitions/RegisterRequest"
                         }
+                    },
+                    {
+                        "type": "string",
+                        "description": "Device ID",
+                        "name": "X-Device-ID",
+                        "in": "header"
                     }
                 ],
                 "responses": {

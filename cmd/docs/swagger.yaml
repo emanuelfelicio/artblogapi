@@ -164,6 +164,10 @@ paths:
         required: true
         schema:
           $ref: '#/definitions/LoginRequest'
+      - description: Device ID
+        in: header
+        name: X-Device-ID
+        type: string
       produces:
       - application/json
       responses:
@@ -214,6 +218,11 @@ paths:
       consumes:
       - application/json
       description: Rotates the refresh token cookie and issues a new access token.
+      parameters:
+      - description: Device ID
+        in: header
+        name: X-Device-ID
+        type: string
       produces:
       - application/json
       responses:
@@ -244,6 +253,10 @@ paths:
         required: true
         schema:
           $ref: '#/definitions/RegisterRequest'
+      - description: Device ID
+        in: header
+        name: X-Device-ID
+        type: string
       produces:
       - application/json
       responses:

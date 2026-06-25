@@ -72,11 +72,12 @@ func NewHandler(s AuthService, l *slog.Logger, cookie RefreshCookieConfig) *hand
 //	@Tags			auth
 //	@Accept			json
 //	@Produce		json
-//	@Param			request	body		RegisterRequest	true	"Register request"
-//	@Success		201		{object}	response.Response[RegisterResponse]
-//	@Failure		400		{object}	response.ErrorResponse[[]validation.FieldError]
-//	@Failure		409		{object}	response.ErrorResponse[map[string]bool]
-//	@Failure		500		{object}	response.ErrorResponse[any]
+//	@Param			request		body		RegisterRequest	true	"Register request"
+//	@Param			X-Device-ID	header		string			false	"Device ID"
+//	@Success		201			{object}	response.Response[RegisterResponse]
+//	@Failure		400			{object}	response.ErrorResponse[[]validation.FieldError]
+//	@Failure		409			{object}	response.ErrorResponse[map[string]bool]
+//	@Failure		500			{object}	response.ErrorResponse[any]
 //	@Router			/auth/register [post]
 func (h *handler) Register(c *gin.Context) {
 	var req RegisterRequest
@@ -129,12 +130,13 @@ func (h *handler) Register(c *gin.Context) {
 //	@Tags			auth
 //	@Accept			json
 //	@Produce		json
-//	@Param			request	body		LoginRequest	true	"Login request"
-//	@Success		200		{object}	response.Response[LoginResponse]
-//	@Failure		400		{object}	response.ErrorResponse[[]validation.FieldError]
-//	@Failure		401		{object}	response.ErrorResponse[any]
-//	@Failure		403		{object}	response.ErrorResponse[any]
-//	@Failure		500		{object}	response.ErrorResponse[any]
+//	@Param			request		body		LoginRequest	true	"Login request"
+//	@Param			X-Device-ID	header		string			false	"Device ID"
+//	@Success		200			{object}	response.Response[LoginResponse]
+//	@Failure		400			{object}	response.ErrorResponse[[]validation.FieldError]
+//	@Failure		401			{object}	response.ErrorResponse[any]
+//	@Failure		403			{object}	response.ErrorResponse[any]
+//	@Failure		500			{object}	response.ErrorResponse[any]
 //	@Router			/auth/login [post]
 func (h *handler) Login(c *gin.Context) {
 	var req LoginRequest
@@ -189,9 +191,10 @@ func (h *handler) Login(c *gin.Context) {
 //	@Tags			auth
 //	@Accept			json
 //	@Produce		json
-//	@Success		200	{object}	response.Response[LoginResponse]
-//	@Failure		401	{object}	response.ErrorResponse[any]
-//	@Failure		500	{object}	response.ErrorResponse[any]
+//	@Param			X-Device-ID	header		string	false	"Device ID"
+//	@Success		200			{object}	response.Response[LoginResponse]
+//	@Failure		401			{object}	response.ErrorResponse[any]
+//	@Failure		500			{object}	response.ErrorResponse[any]
 //	@Router			/auth/refresh [post]
 func (h *handler) Refresh(c *gin.Context) {
 	refreshToken, err := c.Cookie(h.cookie.Name)

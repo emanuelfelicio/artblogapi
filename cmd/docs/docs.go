@@ -37,6 +37,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/LoginRequest"
                         }
+                    },
+                    {
+                        "type": "string",
+                        "description": "Device ID",
+                        "name": "X-Device-ID",
+                        "in": "header"
                     }
                 ],
                 "responses": {
@@ -117,6 +123,14 @@ const docTemplate = `{
                     "auth"
                 ],
                 "summary": "Refresh Access Token",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Device ID",
+                        "name": "X-Device-ID",
+                        "in": "header"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -161,6 +175,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/RegisterRequest"
                         }
+                    },
+                    {
+                        "type": "string",
+                        "description": "Device ID",
+                        "name": "X-Device-ID",
+                        "in": "header"
                     }
                 ],
                 "responses": {
