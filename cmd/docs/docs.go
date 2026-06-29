@@ -81,11 +81,6 @@ const docTemplate = `{
         },
         "/auth/logout": {
             "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "description": "Revokes the active session and clears the refresh token cookie.",
                 "tags": [
                     "auth"
@@ -107,7 +102,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/ErrorResponse-any"
                         }
                     }
-                }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
             }
         },
         "/auth/refresh": {
