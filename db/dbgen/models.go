@@ -5,9 +5,59 @@
 package dbgen
 
 import (
+	"database/sql/driver"
+	"fmt"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+type UploadStatus string
+
+const (
+	UploadStatusPENDING    UploadStatus = "PENDING"
+	UploadStatusPROCESSING UploadStatus = "PROCESSING"
+	UploadStatusCOMPLETED  UploadStatus = "COMPLETED"
+	UploadStatusREJECTED   UploadStatus = "REJECTED"
+	UploadStatusEXPIRED    UploadStatus = "EXPIRED"
+	UploadStatusSUPERSEDED UploadStatus = "SUPERSEDED"
+	UploadStatusDELETED    UploadStatus = "DELETED"
+)
+
+func (e *UploadStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = UploadStatus(s)
+	case string:
+		*e = UploadStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for UploadStatus: %T", src)
+	}
+	return nil
+}
+
+type NullUploadStatus struct {
+	UploadStatus UploadStatus
+	Valid        bool // Valid is true if UploadStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullUploadStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.UploadStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.UploadStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullUploadStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.UploadStatus), nil
+}
 
 type Session struct {
 	ID        string
@@ -20,16 +70,28 @@ type Session struct {
 	DeviceID  pgtype.Text
 }
 
+type Upload struct {
+	ID            uuid.UUID
+	UserID        uuid.UUID
+	ObjectKey     string
+	Status        UploadStatus
+	FileSize      pgtype.Int4
+	ContentType   pgtype.Text
+	FailureReason pgtype.Text
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+}
+
 type User struct {
-	ID           uuid.UUID
-	Username     string
-	Email        string
-	PasswordHash string
-	DisplayName  pgtype.Text
-	Bio          pgtype.Text
-	AvatarUrl    pgtype.Text
-	BannerUrl    pgtype.Text
-	IsActive     bool
-	CreatedAt    pgtype.Timestamptz
-	UpdatedAt    pgtype.Timestamptz
+	ID             uuid.UUID
+	Username       string
+	Email          string
+	PasswordHash   string
+	DisplayName    pgtype.Text
+	Bio            pgtype.Text
+	IsActive       bool
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+	AvatarUploadID pgtype.UUID
+	BannerUploadID pgtype.UUID
 }
