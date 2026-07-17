@@ -54,7 +54,7 @@ func (s *stubAuthService) Logout(ctx context.Context, refreshToken string, curre
 
 // --- HELPERS ---
 
-func setupTestHandler(t *testing.T, s AuthService) (*handler, *gin.Engine) {
+func setupTestHandler(t *testing.T, s AuthService) *gin.Engine {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -72,7 +72,7 @@ func setupTestHandler(t *testing.T, s AuthService) (*handler, *gin.Engine) {
 		h.Logout(c)
 	})
 
-	return h, r
+	return r
 }
 
 func performRequest(t *testing.T, r http.Handler, method, path string, body any) *httptest.ResponseRecorder {
@@ -196,7 +196,7 @@ func TestHandler_Register(t *testing.T) {
 			if tt.setupMock != nil {
 				tt.setupMock(stub)
 			}
-			_, r := setupTestHandler(t, stub)
+			r := setupTestHandler(t, stub)
 			w := performRequest(t, r, http.MethodPost, "/register", tt.payload)
 
 			if w.Code != tt.expectedStatus {
@@ -294,7 +294,7 @@ func TestHandler_Login(t *testing.T) {
 			if tt.setupMock != nil {
 				tt.setupMock(stub)
 			}
-			_, r := setupTestHandler(t, stub)
+			r := setupTestHandler(t, stub)
 			w := performRequest(t, r, http.MethodPost, "/login", tt.payload)
 
 			if w.Code != tt.expectedStatus {
@@ -370,7 +370,7 @@ func TestHandler_Refresh(t *testing.T) {
 			if tt.setupMock != nil {
 				tt.setupMock(stub)
 			}
-			_, r := setupTestHandler(t, stub)
+			r := setupTestHandler(t, stub)
 
 			req := httptest.NewRequest(http.MethodPost, "/refresh", nil)
 			if tt.setupCookie != nil {
@@ -397,7 +397,7 @@ func TestHandler_Logout(t *testing.T) {
 		capturedUserID = currentUserID
 		return nil
 	}
-	_, r := setupTestHandler(t, stub)
+	r := setupTestHandler(t, stub)
 
 	req := httptest.NewRequest(http.MethodPost, "/logout", nil)
 	req.AddCookie(&http.Cookie{Name: cookieName, Value: "some-token"})
@@ -436,7 +436,7 @@ func TestHandler_Logout_Failure(t *testing.T) {
 	stub.logout = func(ctx context.Context, refreshToken string, currentUserID uuid.UUID) error {
 		return errors.New("db error")
 	}
-	_, r := setupTestHandler(t, stub)
+	r := setupTestHandler(t, stub)
 
 	req := httptest.NewRequest(http.MethodPost, "/logout", nil)
 	req.AddCookie(&http.Cookie{Name: cookieName, Value: "some-token"})
