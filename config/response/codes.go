@@ -8,5 +8,7 @@ const (
 	ConflictCode       ErrorCode = "CONFLICT_ERROR"
 	UnauthorizedCode   ErrorCode = "UNAUTHORIZED"
 	ForbiddenCode      ErrorCode = "FORBIDDEN"
+	NotFoundCode       ErrorCode = "NOT_FOUND"
+	InvalidCode        ErrorCode = "UNPROCESSABLE_ENTITY"
 	InternalServerCode ErrorCode = "INTERNAL_SERVER_ERROR"
 )

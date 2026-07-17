@@ -21,6 +21,9 @@ type Config struct {
 	RefreshTokenTTL     time.Duration
 	RefreshCookieDomain string
 	RefreshCookieSecure bool
+	CDNBaseURL          string
+	DefaultAvatarURL    string
+	DefaultBannerURL    string
 }
 
 func LoadConfig() Config {
@@ -50,6 +53,9 @@ func LoadConfig() Config {
 		RefreshTokenTTL:     7 * 24 * time.Hour,
 		RefreshCookieDomain: getEnvOrDefault("REFRESH_TOKEN_COOKIE_DOMAIN", ""),
 		RefreshCookieSecure: getEnvOrDefault("REFRESH_TOKEN_COOKIE_SECURE", "false") == "true",
+		CDNBaseURL:          getEnvOrDefault("CDN_BASE_URL", "http://localhost:9000/final"),
+		DefaultAvatarURL:    getEnvOrDefault("DEFAULT_AVATAR_URL", "https://cdn.artblog.io/defaults/avatar.png"),
+		DefaultBannerURL:    getEnvOrDefault("DEFAULT_BANNER_URL", "https://cdn.artblog.io/defaults/banner.png"),
 	}
 }
 
