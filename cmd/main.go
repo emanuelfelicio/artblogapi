@@ -12,6 +12,7 @@ import (
 	"github.com/emanuelfelicio/artblogapi/internal/auth"
 	"github.com/emanuelfelicio/artblogapi/internal/auth/token"
 	"github.com/emanuelfelicio/artblogapi/internal/middleware"
+	"github.com/emanuelfelicio/artblogapi/internal/user"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	swaggerfiles "github.com/swaggo/files"
@@ -51,6 +52,7 @@ func main() {
 
 	// dependencies
 	authRepo := auth.NewRepository(queries, logger, pool)
+	userRepo := user.NewRepository(queries)
 
 	authTokenProvider, err := token.NewTokenProvider([]byte(cfg.JWTSecret), cfg.JWTIssuer, cfg.AccessTokenTTL, cfg.RefreshTokenTTL)
 	if err != nil {
@@ -60,6 +62,8 @@ func main() {
 	authService := auth.NewService(authRepo, logger, authTokenProvider)
 	refreshCookieCfg := auth.NewRefreshCookieConfig(cfg.RefreshCookieDomain, cfg.RefreshCookieSecure)
 	authHandler := auth.NewHandler(authService, logger, refreshCookieCfg)
+	userService := user.NewService(userRepo)
+	userHandler := user.NewHandler(userService, logger, cfg.CDNBaseURL, cfg.DefaultAvatarURL, cfg.DefaultBannerURL)
 
 	if cfg.AppEnv == "production" {
 		gin.SetMode(gin.ReleaseMode)
@@ -75,6 +79,7 @@ func main() {
 	v1 := router.Group("/api/v1")
 	{
 		auth.Routes(v1, authHandler, authMiddleware)
+		user.Routes(v1, userHandler, authMiddleware)
 	}
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
 
