@@ -158,7 +158,8 @@ func (h *handler) UpdateBanner(c *gin.Context) {
 func (h *handler) mustUserID(c *gin.Context) (uuid.UUID, bool) {
 	raw, exists := c.Get("auth.principal")
 	if !exists {
-		response.Fail(c, http.StatusUnauthorized, response.UnauthorizedCode, "unauthorized")
+		h.logger.Error("auth_principal_missing_from_context")
+		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "internal error")
 		return uuid.Nil, false
 	}
 
@@ -171,7 +172,8 @@ func (h *handler) mustUserID(c *gin.Context) (uuid.UUID, bool) {
 
 	userID, err := uuid.Parse(principal.UserID)
 	if err != nil {
-		response.Fail(c, http.StatusUnauthorized, response.UnauthorizedCode, "invalid token")
+		h.logger.Error("invalid_user_id_in_principal", slog.String("user_id", principal.UserID), slog.Any("err", err))
+		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "internal error")
 		return uuid.Nil, false
 	}
 
