@@ -246,7 +246,8 @@ func (h *handler) Logout(c *gin.Context) {
 
 	principalAny, exists := c.Get("auth.principal")
 	if !exists {
-		response.Fail(c, http.StatusUnauthorized, response.UnauthorizedCode, "unauthorized")
+		h.logger.Error("auth_principal_missing_from_context")
+		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "error trying to logout")
 		return
 	}
 
@@ -259,8 +260,8 @@ func (h *handler) Logout(c *gin.Context) {
 
 	userID, err := uuid.Parse(principal.UserID)
 	if err != nil {
-		h.logger.Error("logout_failed_invalid_uuid", slog.String("user_id", principal.UserID))
-		response.Fail(c, http.StatusUnauthorized, response.UnauthorizedCode, "invalid token")
+		h.logger.Error("logout_failed_invalid_uuid", slog.String("user_id", principal.UserID), slog.Any("err", err))
+		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "error trying to logout")
 		return
 	}
 
