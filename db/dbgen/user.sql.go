@@ -13,7 +13,7 @@ import (
 )
 
 const findCompletedUploadByOwner = `-- name: FindCompletedUploadByOwner :one
-SELECT id, object_key FROM uploads
+SELECT id FROM uploads
 WHERE id = $1 AND user_id = $2 AND status = 'COMPLETED'
 `
 
@@ -22,16 +22,11 @@ type FindCompletedUploadByOwnerParams struct {
 	UserID uuid.UUID
 }
 
-type FindCompletedUploadByOwnerRow struct {
-	ID        uuid.UUID
-	ObjectKey string
-}
-
-func (q *Queries) FindCompletedUploadByOwner(ctx context.Context, arg FindCompletedUploadByOwnerParams) (FindCompletedUploadByOwnerRow, error) {
+func (q *Queries) FindCompletedUploadByOwner(ctx context.Context, arg FindCompletedUploadByOwnerParams) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, findCompletedUploadByOwner, arg.ID, arg.UserID)
-	var i FindCompletedUploadByOwnerRow
-	err := row.Scan(&i.ID, &i.ObjectKey)
-	return i, err
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const getMyUserProfileByID = `-- name: GetMyUserProfileByID :one

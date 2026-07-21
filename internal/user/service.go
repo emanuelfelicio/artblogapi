@@ -12,7 +12,7 @@ type Repository interface {
 	UpdateProfile(ctx context.Context, id uuid.UUID, displayName, bio *string) (User, error)
 	UpdateAvatar(ctx context.Context, userID, uploadID uuid.UUID) error
 	UpdateBanner(ctx context.Context, userID, uploadID uuid.UUID) error
-	FindCompletedUploadByOwner(ctx context.Context, uploadID, userID uuid.UUID) (string, error)
+	FindCompletedUploadByOwner(ctx context.Context, uploadID, userID uuid.UUID) error
 }
 
 type service struct {
@@ -41,7 +41,7 @@ func (s *service) UpdateAvatar(ctx context.Context, userID uuid.UUID, uploadIDSt
 		return ErrUploadNotFound
 	}
 
-	if _, err := s.repo.FindCompletedUploadByOwner(ctx, uploadID, userID); err != nil {
+	if err := s.repo.FindCompletedUploadByOwner(ctx, uploadID, userID); err != nil {
 		return err
 	}
 
@@ -54,7 +54,7 @@ func (s *service) UpdateBanner(ctx context.Context, userID uuid.UUID, uploadIDSt
 		return ErrUploadNotFound
 	}
 
-	if _, err := s.repo.FindCompletedUploadByOwner(ctx, uploadID, userID); err != nil {
+	if err := s.repo.FindCompletedUploadByOwner(ctx, uploadID, userID); err != nil {
 		return err
 	}
 

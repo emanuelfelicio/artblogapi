@@ -69,16 +69,16 @@ func (r *repository) UpdateBanner(ctx context.Context, userID, uploadID uuid.UUI
 	return nil
 }
 
-func (r *repository) FindCompletedUploadByOwner(ctx context.Context, uploadID, userID uuid.UUID) (string, error) {
-	row, err := r.query.FindCompletedUploadByOwner(ctx, dbgen.FindCompletedUploadByOwnerParams{ID: uploadID, UserID: userID})
+func (r *repository) FindCompletedUploadByOwner(ctx context.Context, uploadID, userID uuid.UUID) error {
+	_, err := r.query.FindCompletedUploadByOwner(ctx, dbgen.FindCompletedUploadByOwnerParams{ID: uploadID, UserID: userID})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return "", ErrUploadNotFound
+			return ErrUploadNotFound
 		}
-		return "", fmt.Errorf("find_completed_upload: %w", err)
+		return fmt.Errorf("find_completed_upload: %w", err)
 	}
 
-	return row.ObjectKey, nil
+	return nil
 }
 
 func mapPublicProfile(row dbgen.GetPublicUserProfileByUsernameRow) User {

@@ -38,5 +38,5 @@ UPDATE users SET avatar_upload_id = $2, updated_at = now() WHERE id = $1;
 UPDATE users SET banner_upload_id = $2, updated_at = now() WHERE id = $1;
 
 -- name: FindCompletedUploadByOwner :one
-SELECT id, object_key FROM uploads
+SELECT id FROM uploads
 WHERE id = $1 AND user_id = $2 AND status = 'COMPLETED';
