@@ -7,6 +7,8 @@ definitions:
     - CONFLICT_ERROR
     - UNAUTHORIZED
     - FORBIDDEN
+    - NOT_FOUND
+    - UNPROCESSABLE_ENTITY
     - INTERNAL_SERVER_ERROR
     type: string
     x-enum-varnames:
@@ -15,6 +17,8 @@ definitions:
     - ConflictCode
     - UnauthorizedCode
     - ForbiddenCode
+    - NotFoundCode
+    - InvalidCode
     - InternalServerCode
   ErrorInfo-any:
     properties:
@@ -94,6 +98,42 @@ definitions:
         example: Bearer
         type: string
     type: object
+  MyProfileResponse:
+    properties:
+      avatar_url:
+        type: string
+      banner_url:
+        type: string
+      bio:
+        type: string
+      created_at:
+        type: string
+      display_name:
+        type: string
+      email:
+        type: string
+      is_active:
+        type: boolean
+      updated_at:
+        type: string
+      username:
+        type: string
+    type: object
+  PublicProfileResponse:
+    properties:
+      avatar_url:
+        type: string
+      banner_url:
+        type: string
+      bio:
+        type: string
+      created_at:
+        type: string
+      display_name:
+        type: string
+      username:
+        type: string
+    type: object
   RegisterRequest:
     properties:
       email:
@@ -139,6 +179,39 @@ definitions:
     properties:
       data:
         $ref: '#/definitions/RegisterResponse'
+    type: object
+  Response-internal_user_MyProfileResponse:
+    properties:
+      data:
+        $ref: '#/definitions/MyProfileResponse'
+    type: object
+  Response-internal_user_PublicProfileResponse:
+    properties:
+      data:
+        $ref: '#/definitions/PublicProfileResponse'
+    type: object
+  UpdateAvatarRequest:
+    properties:
+      upload_id:
+        type: string
+    required:
+    - upload_id
+    type: object
+  UpdateBannerRequest:
+    properties:
+      upload_id:
+        type: string
+    required:
+    - upload_id
+    type: object
+  UpdateProfileRequest:
+    properties:
+      bio:
+        maxLength: 500
+        type: string
+      display_name:
+        maxLength: 60
+        type: string
     type: object
   map_string_bool:
     additionalProperties:
@@ -279,6 +352,167 @@ paths:
       summary: Register a new user
       tags:
       - auth
+  /users/{username}:
+    get:
+      description: Returns public profile information for a given username.
+      parameters:
+      - description: Username
+        in: path
+        name: username
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/Response-internal_user_PublicProfileResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+      summary: Get public profile
+      tags:
+      - users
+  /users/me:
+    get:
+      description: Returns the full profile of the authenticated user.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/Response-internal_user_MyProfileResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+      security:
+      - BearerAuth: []
+      summary: Get my profile
+      tags:
+      - users
+    put:
+      consumes:
+      - application/json
+      description: Updates the display name and/or bio of the authenticated user.
+      parameters:
+      - description: Update profile request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/UpdateProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/Response-internal_user_MyProfileResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ErrorResponse-array_github_com_emanuelfelicio_artblogapi_config_validation_FieldError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+      security:
+      - BearerAuth: []
+      summary: Update profile
+      tags:
+      - users
+  /users/me/avatar:
+    put:
+      consumes:
+      - application/json
+      description: Sets the avatar of the authenticated user from a completed upload.
+      parameters:
+      - description: Update avatar request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/UpdateAvatarRequest'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ErrorResponse-array_github_com_emanuelfelicio_artblogapi_config_validation_FieldError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+      security:
+      - BearerAuth: []
+      summary: Update avatar
+      tags:
+      - users
+  /users/me/banner:
+    put:
+      consumes:
+      - application/json
+      description: Sets the banner of the authenticated user from a completed upload.
+      parameters:
+      - description: Update banner request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/UpdateBannerRequest'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ErrorResponse-array_github_com_emanuelfelicio_artblogapi_config_validation_FieldError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+      security:
+      - BearerAuth: []
+      summary: Update banner
+      tags:
+      - users
 securityDefinitions:
   BearerAuth:
     in: header
