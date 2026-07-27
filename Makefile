@@ -41,6 +41,11 @@ tidy:
 test:
 	go test -v -race -buildvcs ./...
 
+## test/debug: run all tests with testcontainers and goose debug logs enabled
+.PHONY: test/debug
+test/debug:
+	TEST_DEBUG=true go test -v -race -buildvcs ./...
+
 ## audit: run quality control checks
 .PHONY: audit
 audit: test sqlc-diff

@@ -11,8 +11,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
-	"github.com/joho/godotenv"
 	"github.com/pressly/goose/v3"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 var (
@@ -20,17 +22,49 @@ var (
 	testRepo   Repository
 )
 
+type nopLogger struct{}
+
+func (n *nopLogger) Printf(format string, v ...any) {}
+
 func TestMain(m *testing.M) {
-	_ = godotenv.Load("../../.env")
 	ctx := context.Background()
 
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		os.Stderr.WriteString("DATABASE_URL not set, aborting integration tests\n")
+	debug := os.Getenv("TEST_DEBUG") == "true"
+
+	var containerOpts []testcontainers.ContainerCustomizer
+	containerOpts = append(containerOpts,
+		postgres.WithDatabase("artblog_test"),
+		postgres.WithUsername("postgres"),
+		postgres.WithPassword("postgres"),
+		testcontainers.WithWaitStrategy(
+			wait.ForLog("database system is ready to accept connections").
+				WithOccurrence(2).
+				WithStartupTimeout(30*time.Second),
+		),
+	)
+
+	if !debug {
+		containerOpts = append(containerOpts, testcontainers.WithLogger(&nopLogger{}))
+		goose.SetLogger(goose.NopLogger())
+	}
+
+	postgresContainer, err := postgres.Run(ctx, "postgres:16-alpine", containerOpts...)
+	if err != nil {
+		os.Stderr.WriteString("failed to start postgres container: " + err.Error() + "\n")
+		os.Exit(1)
+	}
+	defer func() {
+		if err := postgresContainer.Terminate(ctx); err != nil {
+			os.Stderr.WriteString("failed to terminate container: " + err.Error() + "\n")
+		}
+	}()
+
+	dbURL, err := postgresContainer.ConnectionString(ctx, "sslmode=disable")
+	if err != nil {
+		os.Stderr.WriteString("failed to get connection string: " + err.Error() + "\n")
 		os.Exit(1)
 	}
 
-	var err error
 	testDBPool, err = pgxpool.New(ctx, dbURL)
 	if err != nil {
 		os.Stderr.WriteString("failed to create pgx pool: " + err.Error() + "\n")
@@ -41,7 +75,7 @@ func TestMain(m *testing.M) {
 	sqlDB := stdlib.OpenDB(*testDBPool.Config().ConnConfig)
 	defer sqlDB.Close()
 
-	gooseDir := os.Getenv("GOOSE_DIR")
+	gooseDir := "../../db/migrations"
 	if err = goose.Up(sqlDB, gooseDir); err != nil {
 		os.Stderr.WriteString("goose up failed: " + err.Error() + "\n")
 		os.Exit(1)
