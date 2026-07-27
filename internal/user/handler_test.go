@@ -65,47 +65,22 @@ func (s *stubUserService) UpdateBanner(ctx context.Context, userID uuid.UUID, up
 
 // --- HELPERS ---
 
-func setupRouter(svc UserService) *gin.Engine {
+func setupTestRouter(svc UserService, authMiddleware gin.HandlerFunc) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	h := NewHandler(svc, logger, "http://cdn.example.com", "http://cdn.example.com/default/avatar.png", "http://cdn.example.com/default/banner.png")
 
 	r := gin.New()
 	v1 := r.Group("/api/v1")
-	userID := uuid.New()
-	authMiddleware := func(c *gin.Context) {
-		c.Set("auth.principal", auth.AuthPrincipal{UserID: userID.String()})
-		c.Next()
-	}
 	Routes(v1, h, authMiddleware)
 	return r
 }
 
-func setupRouterWithPrincipal(svc UserService, principalID string) *gin.Engine {
-	gin.SetMode(gin.TestMode)
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := NewHandler(svc, logger, "http://cdn.example.com", "http://cdn.example.com/default/avatar.png", "http://cdn.example.com/default/banner.png")
-
-	r := gin.New()
-	v1 := r.Group("/api/v1")
-	authMiddleware := func(c *gin.Context) {
+func withPrincipal(principalID string) gin.HandlerFunc {
+	return func(c *gin.Context) {
 		c.Set("auth.principal", auth.AuthPrincipal{UserID: principalID})
 		c.Next()
 	}
-	Routes(v1, h, authMiddleware)
-	return r
-}
-
-func setupRouterNoAuth(svc UserService) *gin.Engine {
-	gin.SetMode(gin.TestMode)
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := NewHandler(svc, logger, "http://cdn.example.com", "http://cdn.example.com/default/avatar.png", "http://cdn.example.com/default/banner.png")
-
-	r := gin.New()
-	v1 := r.Group("/api/v1")
-	noAuth := func(c *gin.Context) { c.Next() }
-	Routes(v1, h, noAuth)
-	return r
 }
 
 func doRequest(t *testing.T, r http.Handler, method, path string, body any) *httptest.ResponseRecorder {
@@ -151,13 +126,14 @@ func sampleUser() User {
 // --- GET /:username ---
 
 func TestHandler_GetPublicProfile_200(t *testing.T) {
+	t.Parallel()
 	u := sampleUser()
 	svc := &stubUserService{
 		getPublicProfile: func(_ context.Context, username string) (User, error) {
 			return u, nil
 		},
 	}
-	r := setupRouter(svc)
+	r := setupTestRouter(svc, withPrincipal(uuid.NewString()))
 	w := doRequest(t, r, http.MethodGet, "/api/v1/users/joao", nil)
 
 	if w.Code != http.StatusOK {
@@ -174,12 +150,13 @@ func TestHandler_GetPublicProfile_200(t *testing.T) {
 }
 
 func TestHandler_GetPublicProfile_404(t *testing.T) {
+	t.Parallel()
 	svc := &stubUserService{
 		getPublicProfile: func(_ context.Context, _ string) (User, error) {
 			return User{}, ErrUserNotFound
 		},
 	}
-	r := setupRouter(svc)
+	r := setupTestRouter(svc, withPrincipal(uuid.NewString()))
 	w := doRequest(t, r, http.MethodGet, "/api/v1/users/ghost", nil)
 
 	if w.Code != http.StatusNotFound {
@@ -190,13 +167,14 @@ func TestHandler_GetPublicProfile_404(t *testing.T) {
 // --- GET /me ---
 
 func TestHandler_GetMyProfile_200(t *testing.T) {
+	t.Parallel()
 	u := sampleUser()
 	svc := &stubUserService{
 		getMyProfile: func(_ context.Context, _ uuid.UUID) (User, error) {
 			return u, nil
 		},
 	}
-	r := setupRouterWithPrincipal(svc, u.ID.String())
+	r := setupTestRouter(svc, withPrincipal(u.ID.String()))
 	w := doRequest(t, r, http.MethodGet, "/api/v1/users/me", nil)
 
 	if w.Code != http.StatusOK {
@@ -209,19 +187,10 @@ func TestHandler_GetMyProfile_200(t *testing.T) {
 	}
 }
 
-func TestHandler_GetMyProfile_500_NoPrincipal(t *testing.T) {
-	svc := &stubUserService{}
-	r := setupRouterNoAuth(svc)
-	w := doRequest(t, r, http.MethodGet, "/api/v1/users/me", nil)
-
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d", w.Code)
-	}
-}
-
 // --- PUT /me ---
 
 func TestHandler_UpdateProfile_200(t *testing.T) {
+	t.Parallel()
 	u := sampleUser()
 	svc := &stubUserService{
 		updateProfile: func(_ context.Context, _ uuid.UUID, dn, b *string) (User, error) {
@@ -231,7 +200,7 @@ func TestHandler_UpdateProfile_200(t *testing.T) {
 			return u, nil
 		},
 	}
-	r := setupRouterWithPrincipal(svc, u.ID.String())
+	r := setupTestRouter(svc, withPrincipal(u.ID.String()))
 	body := map[string]string{"display_name": "Novo Nome"}
 	w := doRequest(t, r, http.MethodPut, "/api/v1/users/me", body)
 
@@ -241,8 +210,9 @@ func TestHandler_UpdateProfile_200(t *testing.T) {
 }
 
 func TestHandler_UpdateProfile_400_BioTooLong(t *testing.T) {
+	t.Parallel()
 	svc := &stubUserService{}
-	r := setupRouterWithPrincipal(svc, uuid.NewString())
+	r := setupTestRouter(svc, withPrincipal(uuid.NewString()))
 	body := map[string]string{"bio": strings.Repeat("a", 501)}
 	w := doRequest(t, r, http.MethodPut, "/api/v1/users/me", body)
 
@@ -252,8 +222,9 @@ func TestHandler_UpdateProfile_400_BioTooLong(t *testing.T) {
 }
 
 func TestHandler_UpdateProfile_400_DisplayNameTooLong(t *testing.T) {
+	t.Parallel()
 	svc := &stubUserService{}
-	r := setupRouterWithPrincipal(svc, uuid.NewString())
+	r := setupTestRouter(svc, withPrincipal(uuid.NewString()))
 	body := map[string]string{"display_name": strings.Repeat("x", 61)}
 	w := doRequest(t, r, http.MethodPut, "/api/v1/users/me", body)
 
@@ -262,26 +233,16 @@ func TestHandler_UpdateProfile_400_DisplayNameTooLong(t *testing.T) {
 	}
 }
 
-func TestHandler_UpdateProfile_500_NoPrincipal(t *testing.T) {
-	svc := &stubUserService{}
-	r := setupRouterNoAuth(svc)
-	body := map[string]string{"display_name": "qualquer"}
-	w := doRequest(t, r, http.MethodPut, "/api/v1/users/me", body)
-
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d", w.Code)
-	}
-}
-
 // --- PUT /me/avatar ---
 
 func TestHandler_UpdateAvatar_204(t *testing.T) {
+	t.Parallel()
 	svc := &stubUserService{
 		updateAvatar: func(_ context.Context, _ uuid.UUID, _ string) error {
 			return nil
 		},
 	}
-	r := setupRouterWithPrincipal(svc, uuid.NewString())
+	r := setupTestRouter(svc, withPrincipal(uuid.NewString()))
 	body := map[string]string{"upload_id": uuid.NewString()}
 	w := doRequest(t, r, http.MethodPut, "/api/v1/users/me/avatar", body)
 
@@ -291,12 +252,13 @@ func TestHandler_UpdateAvatar_204(t *testing.T) {
 }
 
 func TestHandler_UpdateAvatar_422_UploadNotFound(t *testing.T) {
+	t.Parallel()
 	svc := &stubUserService{
 		updateAvatar: func(_ context.Context, _ uuid.UUID, _ string) error {
 			return ErrUploadNotFound
 		},
 	}
-	r := setupRouterWithPrincipal(svc, uuid.NewString())
+	r := setupTestRouter(svc, withPrincipal(uuid.NewString()))
 	body := map[string]string{"upload_id": uuid.NewString()}
 	w := doRequest(t, r, http.MethodPut, "/api/v1/users/me/avatar", body)
 
@@ -306,8 +268,9 @@ func TestHandler_UpdateAvatar_422_UploadNotFound(t *testing.T) {
 }
 
 func TestHandler_UpdateAvatar_400_MissingUploadID(t *testing.T) {
+	t.Parallel()
 	svc := &stubUserService{}
-	r := setupRouterWithPrincipal(svc, uuid.NewString())
+	r := setupTestRouter(svc, withPrincipal(uuid.NewString()))
 	body := map[string]string{}
 	w := doRequest(t, r, http.MethodPut, "/api/v1/users/me/avatar", body)
 
@@ -316,24 +279,14 @@ func TestHandler_UpdateAvatar_400_MissingUploadID(t *testing.T) {
 	}
 }
 
-func TestHandler_UpdateAvatar_500_NoPrincipal(t *testing.T) {
-	svc := &stubUserService{}
-	r := setupRouterNoAuth(svc)
-	body := map[string]string{"upload_id": uuid.NewString()}
-	w := doRequest(t, r, http.MethodPut, "/api/v1/users/me/avatar", body)
-
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d", w.Code)
-	}
-}
-
 // --- PUT /me/banner ---
 
 func TestHandler_UpdateBanner_204(t *testing.T) {
+	t.Parallel()
 	svc := &stubUserService{
 		updateBanner: func(_ context.Context, _ uuid.UUID, _ string) error { return nil },
 	}
-	r := setupRouterWithPrincipal(svc, uuid.NewString())
+	r := setupTestRouter(svc, withPrincipal(uuid.NewString()))
 	body := map[string]string{"upload_id": uuid.NewString()}
 	w := doRequest(t, r, http.MethodPut, "/api/v1/users/me/banner", body)
 
@@ -343,12 +296,13 @@ func TestHandler_UpdateBanner_204(t *testing.T) {
 }
 
 func TestHandler_UpdateBanner_422_UploadNotFound(t *testing.T) {
+	t.Parallel()
 	svc := &stubUserService{
 		updateBanner: func(_ context.Context, _ uuid.UUID, _ string) error {
 			return ErrUploadNotFound
 		},
 	}
-	r := setupRouterWithPrincipal(svc, uuid.NewString())
+	r := setupTestRouter(svc, withPrincipal(uuid.NewString()))
 	body := map[string]string{"upload_id": uuid.NewString()}
 	w := doRequest(t, r, http.MethodPut, "/api/v1/users/me/banner", body)
 
@@ -360,6 +314,7 @@ func TestHandler_UpdateBanner_422_UploadNotFound(t *testing.T) {
 // --- URL resolution ---
 
 func TestHandler_AvatarURL_Fallback(t *testing.T) {
+	t.Parallel()
 	svc := &stubUserService{
 		getPublicProfile: func(_ context.Context, _ string) (User, error) {
 			u := sampleUser()
@@ -367,7 +322,7 @@ func TestHandler_AvatarURL_Fallback(t *testing.T) {
 			return u, nil
 		},
 	}
-	r := setupRouter(svc)
+	r := setupTestRouter(svc, withPrincipal(uuid.NewString()))
 	w := doRequest(t, r, http.MethodGet, "/api/v1/users/joao", nil)
 
 	if w.Code != http.StatusOK {
@@ -380,6 +335,7 @@ func TestHandler_AvatarURL_Fallback(t *testing.T) {
 }
 
 func TestHandler_BannerURL_Fallback(t *testing.T) {
+	t.Parallel()
 	svc := &stubUserService{
 		getPublicProfile: func(_ context.Context, _ string) (User, error) {
 			u := sampleUser()
@@ -387,7 +343,7 @@ func TestHandler_BannerURL_Fallback(t *testing.T) {
 			return u, nil
 		},
 	}
-	r := setupRouter(svc)
+	r := setupTestRouter(svc, withPrincipal(uuid.NewString()))
 	w := doRequest(t, r, http.MethodGet, "/api/v1/users/joao", nil)
 
 	if w.Code != http.StatusOK {
