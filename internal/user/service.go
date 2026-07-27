@@ -38,6 +38,7 @@ func (s *service) UpdateProfile(ctx context.Context, userID uuid.UUID, displayNa
 func (s *service) UpdateAvatar(ctx context.Context, userID uuid.UUID, uploadIDStr string) error {
 	uploadID, err := uuid.Parse(uploadIDStr)
 	if err != nil {
+		// returns not found even for invalid UUID to avoid leaking rejection reason (resource enumeration)
 		return ErrUploadNotFound
 	}
 
@@ -51,6 +52,7 @@ func (s *service) UpdateAvatar(ctx context.Context, userID uuid.UUID, uploadIDSt
 func (s *service) UpdateBanner(ctx context.Context, userID uuid.UUID, uploadIDStr string) error {
 	uploadID, err := uuid.Parse(uploadIDStr)
 	if err != nil {
+		// returns not found even for invalid UUID to avoid leaking rejection reason (resource enumeration)
 		return ErrUploadNotFound
 	}
 

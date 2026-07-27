@@ -52,6 +52,7 @@ func (r *repository) UpdateProfile(ctx context.Context, id uuid.UUID, displayNam
 		return User{}, fmt.Errorf("update_profile: %w", err)
 	}
 
+	// re-fetches to return the current DB state (including DB-computed fields)
 	return r.FindByID(ctx, id)
 }
 
@@ -133,6 +134,8 @@ func mapMyProfile(row dbgen.GetMyUserProfileByIDRow) User {
 	return u
 }
 
+// textParam converts an optional string to pgtype.Text.
+// A nil pointer produces Valid=false, which maps to NULL in Postgres.
 func textParam(value *string) pgtype.Text {
 	if value == nil {
 		return pgtype.Text{}
