@@ -25,8 +25,8 @@ WHERE u.id = $1;
 -- name: UpdateUserProfile :one
 UPDATE users
 SET
-    display_name = coalesce(sqlc.narg('display_name'), display_name),
-    bio         = coalesce(sqlc.narg('bio'), bio),
+    display_name = coalesce($2, display_name),
+    bio         = coalesce($3, bio),
     updated_at   = now()
 WHERE id = $1
 RETURNING id;
