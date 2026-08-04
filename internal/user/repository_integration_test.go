@@ -123,8 +123,8 @@ func mustCreateUser(t *testing.T, ctx context.Context, u User) {
 func mustCreateUpload(t *testing.T, ctx context.Context, id uuid.UUID, userID uuid.UUID, key string, status string) {
 	t.Helper()
 	_, err := testDBPool.Exec(ctx, `
-		INSERT INTO uploads (id, user_id, object_key, status, file_size, content_type)
-		VALUES ($1, $2, $3, $4, 1024, 'image/png')
+		INSERT INTO uploads (id, user_id, object_key, status, purpose, file_size, content_type)
+		VALUES ($1, $2, $3, $4, 'AVATAR', 1024, 'image/png')
 	`, id, userID, key, status)
 	if err != nil {
 		t.Fatalf("mustCreateUpload: %v", err)
@@ -192,8 +192,8 @@ func TestRepository_FindByUsername(t *testing.T) {
 
 		avatarID := uuid.New()
 		bannerID := uuid.New()
-		mustCreateUpload(t, ctx, avatarID, u.ID, "avatars/my-avatar.png", "COMPLETED")
-		mustCreateUpload(t, ctx, bannerID, u.ID, "banners/my-banner.png", "COMPLETED")
+		mustCreateUpload(t, ctx, avatarID, u.ID, "avatars/my-avatar.png", "BOUND")
+		mustCreateUpload(t, ctx, bannerID, u.ID, "banners/my-banner.png", "BOUND")
 
 		_, err := testDBPool.Exec(ctx, `
 			UPDATE users SET avatar_upload_id = $1, banner_upload_id = $2 WHERE id = $3
@@ -365,7 +365,7 @@ func TestRepository_UpdateAvatar(t *testing.T) {
 		mustCreateUser(t, ctx, u)
 
 		avatarID := uuid.New()
-		mustCreateUpload(t, ctx, avatarID, u.ID, "avatars/my-avatar.png", "COMPLETED")
+		mustCreateUpload(t, ctx, avatarID, u.ID, "avatars/my-avatar.png", "BOUND")
 
 		err := testRepo.UpdateAvatar(ctx, u.ID, avatarID)
 		if err != nil {
@@ -403,7 +403,7 @@ func TestRepository_UpdateBanner(t *testing.T) {
 		mustCreateUser(t, ctx, u)
 
 		bannerID := uuid.New()
-		mustCreateUpload(t, ctx, bannerID, u.ID, "banners/my-banner.png", "COMPLETED")
+		mustCreateUpload(t, ctx, bannerID, u.ID, "banners/my-banner.png", "BOUND")
 
 		err := testRepo.UpdateBanner(ctx, u.ID, bannerID)
 		if err != nil {

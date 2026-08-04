@@ -12,6 +12,49 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type UploadPurpose string
+
+const (
+	UploadPurposeAVATAR    UploadPurpose = "AVATAR"
+	UploadPurposeBANNER    UploadPurpose = "BANNER"
+	UploadPurposePOSTIMAGE UploadPurpose = "POST_IMAGE"
+)
+
+func (e *UploadPurpose) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = UploadPurpose(s)
+	case string:
+		*e = UploadPurpose(s)
+	default:
+		return fmt.Errorf("unsupported scan type for UploadPurpose: %T", src)
+	}
+	return nil
+}
+
+type NullUploadPurpose struct {
+	UploadPurpose UploadPurpose
+	Valid         bool // Valid is true if UploadPurpose is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullUploadPurpose) Scan(value interface{}) error {
+	if value == nil {
+		ns.UploadPurpose, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.UploadPurpose.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullUploadPurpose) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.UploadPurpose), nil
+}
+
 type UploadStatus string
 
 const (
@@ -22,6 +65,7 @@ const (
 	UploadStatusEXPIRED    UploadStatus = "EXPIRED"
 	UploadStatusSUPERSEDED UploadStatus = "SUPERSEDED"
 	UploadStatusDELETED    UploadStatus = "DELETED"
+	UploadStatusBOUND      UploadStatus = "BOUND"
 )
 
 func (e *UploadStatus) Scan(src interface{}) error {
@@ -80,6 +124,8 @@ type Upload struct {
 	FailureReason pgtype.Text
 	CreatedAt     pgtype.Timestamptz
 	UpdatedAt     pgtype.Timestamptz
+	Purpose       UploadPurpose
+	RetryCount    int32
 }
 
 type User struct {

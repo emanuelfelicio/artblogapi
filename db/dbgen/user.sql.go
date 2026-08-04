@@ -37,8 +37,8 @@ SELECT
     up_a.object_key AS avatar_key,
     up_b.object_key AS banner_key
 FROM users u
-LEFT JOIN uploads up_a ON up_a.id = u.avatar_upload_id AND up_a.status = 'COMPLETED'
-LEFT JOIN uploads up_b ON up_b.id = u.banner_upload_id AND up_b.status = 'COMPLETED'
+LEFT JOIN uploads up_a ON up_a.id = u.avatar_upload_id AND up_a.status = 'BOUND'
+LEFT JOIN uploads up_b ON up_b.id = u.banner_upload_id AND up_b.status = 'BOUND'
 WHERE u.id = $1
 `
 
@@ -85,8 +85,8 @@ SELECT
     up_a.object_key AS avatar_key,
     up_b.object_key AS banner_key
 FROM users u
-LEFT JOIN uploads up_a ON up_a.id = u.avatar_upload_id AND up_a.status = 'COMPLETED'
-LEFT JOIN uploads up_b ON up_b.id = u.banner_upload_id AND up_b.status = 'COMPLETED'
+LEFT JOIN uploads up_a ON up_a.id = u.avatar_upload_id AND up_a.status = 'BOUND'
+LEFT JOIN uploads up_b ON up_b.id = u.banner_upload_id AND up_b.status = 'BOUND'
 WHERE u.username = $1 AND u.is_active = true
 `
 
