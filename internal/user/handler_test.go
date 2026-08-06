@@ -1,19 +1,16 @@
 package user
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/emanuelfelicio/artblogapi/config/response"
-	"github.com/emanuelfelicio/artblogapi/internal/auth"
+	"github.com/emanuelfelicio/artblogapi/internal/testutil/testauth"
+	"github.com/emanuelfelicio/artblogapi/internal/testutil/testhttp"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -76,38 +73,6 @@ func setupTestRouter(svc UserService, authMiddleware gin.HandlerFunc) *gin.Engin
 	return r
 }
 
-func withPrincipal(principalID string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Set("auth.principal", auth.AuthPrincipal{UserID: principalID})
-		c.Next()
-	}
-}
-
-func doRequest(t *testing.T, r http.Handler, method, path string, body any) *httptest.ResponseRecorder {
-	t.Helper()
-	var bodyReader io.Reader
-	if body != nil {
-		b, _ := json.Marshal(body)
-		bodyReader = bytes.NewBuffer(b)
-	}
-	req := httptest.NewRequest(method, path, bodyReader)
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	return w
-}
-
-func decodeResponse[T any](t *testing.T, w *httptest.ResponseRecorder) response.Response[T] {
-	t.Helper()
-	var resp response.Response[T]
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	return resp
-}
-
 func sampleUser() User {
 	key := "avatars/file.png"
 	return User{
@@ -126,21 +91,21 @@ func sampleUser() User {
 // --- GET /:username ---
 
 func TestHandler_GetPublicProfile_200(t *testing.T) {
-	t.Parallel()
+
 	u := sampleUser()
 	svc := &stubUserService{
 		getPublicProfile: func(_ context.Context, username string) (User, error) {
 			return u, nil
 		},
 	}
-	r := setupTestRouter(svc, withPrincipal(uuid.NewString()))
-	w := doRequest(t, r, http.MethodGet, "/api/v1/users/joao", nil)
+	r := setupTestRouter(svc, testauth.WithPrincipal(uuid.NewString()))
+	w := testhttp.DoRequest(t, r, http.MethodGet, "/api/v1/users/joao", nil)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	resp := decodeResponse[PublicProfileResponse](t, w)
+	resp := testhttp.DecodeResponse[PublicProfileResponse](t, w)
 	if resp.Data.Username != u.Username {
 		t.Errorf("expected username %q, got %q", u.Username, resp.Data.Username)
 	}
@@ -150,14 +115,14 @@ func TestHandler_GetPublicProfile_200(t *testing.T) {
 }
 
 func TestHandler_GetPublicProfile_404(t *testing.T) {
-	t.Parallel()
+
 	svc := &stubUserService{
 		getPublicProfile: func(_ context.Context, _ string) (User, error) {
 			return User{}, ErrUserNotFound
 		},
 	}
-	r := setupTestRouter(svc, withPrincipal(uuid.NewString()))
-	w := doRequest(t, r, http.MethodGet, "/api/v1/users/ghost", nil)
+	r := setupTestRouter(svc, testauth.WithPrincipal(uuid.NewString()))
+	w := testhttp.DoRequest(t, r, http.MethodGet, "/api/v1/users/ghost", nil)
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", w.Code)
@@ -167,21 +132,21 @@ func TestHandler_GetPublicProfile_404(t *testing.T) {
 // --- GET /me ---
 
 func TestHandler_GetMyProfile_200(t *testing.T) {
-	t.Parallel()
+
 	u := sampleUser()
 	svc := &stubUserService{
 		getMyProfile: func(_ context.Context, _ uuid.UUID) (User, error) {
 			return u, nil
 		},
 	}
-	r := setupTestRouter(svc, withPrincipal(u.ID.String()))
-	w := doRequest(t, r, http.MethodGet, "/api/v1/users/me", nil)
+	r := setupTestRouter(svc, testauth.WithPrincipal(u.ID.String()))
+	w := testhttp.DoRequest(t, r, http.MethodGet, "/api/v1/users/me", nil)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	resp := decodeResponse[MyProfileResponse](t, w)
+	resp := testhttp.DecodeResponse[MyProfileResponse](t, w)
 	if resp.Data.Email != u.Email {
 		t.Errorf("expected email %q, got %q", u.Email, resp.Data.Email)
 	}
@@ -190,7 +155,7 @@ func TestHandler_GetMyProfile_200(t *testing.T) {
 // --- PUT /me ---
 
 func TestHandler_UpdateProfile_200(t *testing.T) {
-	t.Parallel()
+
 	u := sampleUser()
 	svc := &stubUserService{
 		updateProfile: func(_ context.Context, _ uuid.UUID, dn, b *string) (User, error) {
@@ -200,9 +165,9 @@ func TestHandler_UpdateProfile_200(t *testing.T) {
 			return u, nil
 		},
 	}
-	r := setupTestRouter(svc, withPrincipal(u.ID.String()))
+	r := setupTestRouter(svc, testauth.WithPrincipal(u.ID.String()))
 	body := map[string]string{"display_name": "Novo Nome"}
-	w := doRequest(t, r, http.MethodPut, "/api/v1/users/me", body)
+	w := testhttp.DoRequest(t, r, http.MethodPut, "/api/v1/users/me", body)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
@@ -210,11 +175,11 @@ func TestHandler_UpdateProfile_200(t *testing.T) {
 }
 
 func TestHandler_UpdateProfile_400_BioTooLong(t *testing.T) {
-	t.Parallel()
+
 	svc := &stubUserService{}
-	r := setupTestRouter(svc, withPrincipal(uuid.NewString()))
+	r := setupTestRouter(svc, testauth.WithPrincipal(uuid.NewString()))
 	body := map[string]string{"bio": strings.Repeat("a", 501)}
-	w := doRequest(t, r, http.MethodPut, "/api/v1/users/me", body)
+	w := testhttp.DoRequest(t, r, http.MethodPut, "/api/v1/users/me", body)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
@@ -222,11 +187,11 @@ func TestHandler_UpdateProfile_400_BioTooLong(t *testing.T) {
 }
 
 func TestHandler_UpdateProfile_400_DisplayNameTooLong(t *testing.T) {
-	t.Parallel()
+
 	svc := &stubUserService{}
-	r := setupTestRouter(svc, withPrincipal(uuid.NewString()))
+	r := setupTestRouter(svc, testauth.WithPrincipal(uuid.NewString()))
 	body := map[string]string{"display_name": strings.Repeat("x", 61)}
-	w := doRequest(t, r, http.MethodPut, "/api/v1/users/me", body)
+	w := testhttp.DoRequest(t, r, http.MethodPut, "/api/v1/users/me", body)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
@@ -236,15 +201,15 @@ func TestHandler_UpdateProfile_400_DisplayNameTooLong(t *testing.T) {
 // --- PUT /me/avatar ---
 
 func TestHandler_UpdateAvatar_204(t *testing.T) {
-	t.Parallel()
+
 	svc := &stubUserService{
 		updateAvatar: func(_ context.Context, _ uuid.UUID, _ string) error {
 			return nil
 		},
 	}
-	r := setupTestRouter(svc, withPrincipal(uuid.NewString()))
+	r := setupTestRouter(svc, testauth.WithPrincipal(uuid.NewString()))
 	body := map[string]string{"upload_id": uuid.NewString()}
-	w := doRequest(t, r, http.MethodPut, "/api/v1/users/me/avatar", body)
+	w := testhttp.DoRequest(t, r, http.MethodPut, "/api/v1/users/me/avatar", body)
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
@@ -252,15 +217,15 @@ func TestHandler_UpdateAvatar_204(t *testing.T) {
 }
 
 func TestHandler_UpdateAvatar_422_UploadNotFound(t *testing.T) {
-	t.Parallel()
+
 	svc := &stubUserService{
 		updateAvatar: func(_ context.Context, _ uuid.UUID, _ string) error {
 			return ErrUploadNotFound
 		},
 	}
-	r := setupTestRouter(svc, withPrincipal(uuid.NewString()))
+	r := setupTestRouter(svc, testauth.WithPrincipal(uuid.NewString()))
 	body := map[string]string{"upload_id": uuid.NewString()}
-	w := doRequest(t, r, http.MethodPut, "/api/v1/users/me/avatar", body)
+	w := testhttp.DoRequest(t, r, http.MethodPut, "/api/v1/users/me/avatar", body)
 
 	if w.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("expected 422, got %d: %s", w.Code, w.Body.String())
@@ -268,11 +233,11 @@ func TestHandler_UpdateAvatar_422_UploadNotFound(t *testing.T) {
 }
 
 func TestHandler_UpdateAvatar_400_MissingUploadID(t *testing.T) {
-	t.Parallel()
+
 	svc := &stubUserService{}
-	r := setupTestRouter(svc, withPrincipal(uuid.NewString()))
+	r := setupTestRouter(svc, testauth.WithPrincipal(uuid.NewString()))
 	body := map[string]string{}
-	w := doRequest(t, r, http.MethodPut, "/api/v1/users/me/avatar", body)
+	w := testhttp.DoRequest(t, r, http.MethodPut, "/api/v1/users/me/avatar", body)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
@@ -282,13 +247,13 @@ func TestHandler_UpdateAvatar_400_MissingUploadID(t *testing.T) {
 // --- PUT /me/banner ---
 
 func TestHandler_UpdateBanner_204(t *testing.T) {
-	t.Parallel()
+
 	svc := &stubUserService{
 		updateBanner: func(_ context.Context, _ uuid.UUID, _ string) error { return nil },
 	}
-	r := setupTestRouter(svc, withPrincipal(uuid.NewString()))
+	r := setupTestRouter(svc, testauth.WithPrincipal(uuid.NewString()))
 	body := map[string]string{"upload_id": uuid.NewString()}
-	w := doRequest(t, r, http.MethodPut, "/api/v1/users/me/banner", body)
+	w := testhttp.DoRequest(t, r, http.MethodPut, "/api/v1/users/me/banner", body)
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
@@ -296,15 +261,15 @@ func TestHandler_UpdateBanner_204(t *testing.T) {
 }
 
 func TestHandler_UpdateBanner_422_UploadNotFound(t *testing.T) {
-	t.Parallel()
+
 	svc := &stubUserService{
 		updateBanner: func(_ context.Context, _ uuid.UUID, _ string) error {
 			return ErrUploadNotFound
 		},
 	}
-	r := setupTestRouter(svc, withPrincipal(uuid.NewString()))
+	r := setupTestRouter(svc, testauth.WithPrincipal(uuid.NewString()))
 	body := map[string]string{"upload_id": uuid.NewString()}
-	w := doRequest(t, r, http.MethodPut, "/api/v1/users/me/banner", body)
+	w := testhttp.DoRequest(t, r, http.MethodPut, "/api/v1/users/me/banner", body)
 
 	if w.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("expected 422, got %d: %s", w.Code, w.Body.String())
@@ -314,7 +279,7 @@ func TestHandler_UpdateBanner_422_UploadNotFound(t *testing.T) {
 // --- URL resolution ---
 
 func TestHandler_AvatarURL_Fallback(t *testing.T) {
-	t.Parallel()
+
 	svc := &stubUserService{
 		getPublicProfile: func(_ context.Context, _ string) (User, error) {
 			u := sampleUser()
@@ -322,20 +287,20 @@ func TestHandler_AvatarURL_Fallback(t *testing.T) {
 			return u, nil
 		},
 	}
-	r := setupTestRouter(svc, withPrincipal(uuid.NewString()))
-	w := doRequest(t, r, http.MethodGet, "/api/v1/users/joao", nil)
+	r := setupTestRouter(svc, testauth.WithPrincipal(uuid.NewString()))
+	w := testhttp.DoRequest(t, r, http.MethodGet, "/api/v1/users/joao", nil)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
-	resp := decodeResponse[PublicProfileResponse](t, w)
+	resp := testhttp.DecodeResponse[PublicProfileResponse](t, w)
 	if resp.Data.AvatarURL != "http://cdn.example.com/default/avatar.png" {
 		t.Errorf("expected default avatar URL, got %q", resp.Data.AvatarURL)
 	}
 }
 
 func TestHandler_BannerURL_Fallback(t *testing.T) {
-	t.Parallel()
+
 	svc := &stubUserService{
 		getPublicProfile: func(_ context.Context, _ string) (User, error) {
 			u := sampleUser()
@@ -343,13 +308,13 @@ func TestHandler_BannerURL_Fallback(t *testing.T) {
 			return u, nil
 		},
 	}
-	r := setupTestRouter(svc, withPrincipal(uuid.NewString()))
-	w := doRequest(t, r, http.MethodGet, "/api/v1/users/joao", nil)
+	r := setupTestRouter(svc, testauth.WithPrincipal(uuid.NewString()))
+	w := testhttp.DoRequest(t, r, http.MethodGet, "/api/v1/users/joao", nil)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
-	resp := decodeResponse[PublicProfileResponse](t, w)
+	resp := testhttp.DecodeResponse[PublicProfileResponse](t, w)
 	if resp.Data.BannerURL != "http://cdn.example.com/default/banner.png" {
 		t.Errorf("expected default banner URL, got %q", resp.Data.BannerURL)
 	}

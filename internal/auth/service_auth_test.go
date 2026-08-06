@@ -151,7 +151,6 @@ func assertRefreshTokenHashed(t *testing.T, repo *stubRepository, tokenProvider 
 
 func TestService_Register(t *testing.T) {
 	t.Parallel()
-
 	const (
 		ua       = "test-agent"
 		ip       = "127.0.0.1"
@@ -219,7 +218,6 @@ func TestService_Register(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-
 			repo, tokenProvider := tt.setup()
 			service := NewService(repo, slog.New(slog.NewTextHandler(io.Discard, nil)), tokenProvider)
 
@@ -266,7 +264,6 @@ func TestService_Register(t *testing.T) {
 
 func TestService_Login(t *testing.T) {
 	t.Parallel()
-
 	const (
 		credential  = "john.doe"
 		correctPass = "CorrectPass!123"
@@ -332,7 +329,6 @@ func TestService_Login(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-
 			repo, tokenProvider := tt.setup()
 			service := NewService(repo, slog.New(slog.NewTextHandler(io.Discard, nil)), tokenProvider)
 
@@ -368,7 +364,6 @@ func TestService_Login(t *testing.T) {
 
 func TestService_Refresh(t *testing.T) {
 	t.Parallel()
-
 	userID := uuid.New()
 	const (
 		oldToken = "old-refresh-token"
@@ -443,7 +438,6 @@ func TestService_Refresh(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-
 			repo, tokenProvider := tt.setup()
 
 			var revokeCalled bool
@@ -500,7 +494,6 @@ func TestService_Refresh(t *testing.T) {
 
 func TestService_Logout(t *testing.T) {
 	t.Parallel()
-
 	userID := uuid.New()
 	const refreshToken = "test-refresh-token"
 
@@ -552,7 +545,6 @@ func TestService_Logout(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-
 			repo := tt.setup()
 
 			var revokeCalled bool

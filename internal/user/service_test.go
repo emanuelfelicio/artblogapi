@@ -80,7 +80,7 @@ func newUser() User {
 // --- TESTS ---
 
 func TestService_GetPublicProfile_Found(t *testing.T) {
-	t.Parallel()
+
 	expected := newUser()
 	svc := NewService(&stubRepository{
 		findByUsername: func(_ context.Context, username string) (User, error) {
@@ -101,7 +101,7 @@ func TestService_GetPublicProfile_Found(t *testing.T) {
 }
 
 func TestService_GetPublicProfile_NotFound(t *testing.T) {
-	t.Parallel()
+
 	svc := NewService(&stubRepository{
 		findByUsername: func(_ context.Context, _ string) (User, error) {
 			return User{}, ErrUserNotFound
@@ -115,7 +115,7 @@ func TestService_GetPublicProfile_NotFound(t *testing.T) {
 }
 
 func TestService_GetMyProfile(t *testing.T) {
-	t.Parallel()
+
 	expected := newUser()
 	svc := NewService(&stubRepository{
 		findByID: func(_ context.Context, id uuid.UUID) (User, error) {
@@ -133,7 +133,7 @@ func TestService_GetMyProfile(t *testing.T) {
 }
 
 func TestService_UpdateProfile_AllFields(t *testing.T) {
-	t.Parallel()
+
 	userID := uuid.New()
 	name := "New Name"
 	bio := "New bio"
@@ -163,7 +163,7 @@ func TestService_UpdateProfile_AllFields(t *testing.T) {
 }
 
 func TestService_UpdateProfile_OnlyDisplayName(t *testing.T) {
-	t.Parallel()
+
 	userID := uuid.New()
 	name := "Partial Update"
 
@@ -186,7 +186,7 @@ func TestService_UpdateProfile_OnlyDisplayName(t *testing.T) {
 }
 
 func TestService_UpdateProfile_BothNil(t *testing.T) {
-	t.Parallel()
+
 	userID := uuid.New()
 	called := false
 
@@ -210,7 +210,7 @@ func TestService_UpdateProfile_BothNil(t *testing.T) {
 }
 
 func TestService_UpdateAvatar_Success(t *testing.T) {
-	t.Parallel()
+
 	userID := uuid.New()
 	uploadID := uuid.New()
 
@@ -235,7 +235,7 @@ func TestService_UpdateAvatar_Success(t *testing.T) {
 }
 
 func TestService_UpdateAvatar_InvalidUUID(t *testing.T) {
-	t.Parallel()
+
 	svc := NewService(&stubRepository{})
 
 	err := svc.UpdateAvatar(context.Background(), uuid.New(), "not-a-uuid")
@@ -245,7 +245,7 @@ func TestService_UpdateAvatar_InvalidUUID(t *testing.T) {
 }
 
 func TestService_UpdateAvatar_UploadNotFound(t *testing.T) {
-	t.Parallel()
+
 	svc := NewService(&stubRepository{
 		findCompletedUploadByOwner: func(_ context.Context, _, _ uuid.UUID) error {
 			return ErrUploadNotFound
@@ -259,7 +259,7 @@ func TestService_UpdateAvatar_UploadNotFound(t *testing.T) {
 }
 
 func TestService_UpdateBanner_Success(t *testing.T) {
-	t.Parallel()
+
 	userID := uuid.New()
 	uploadID := uuid.New()
 
@@ -281,7 +281,7 @@ func TestService_UpdateBanner_Success(t *testing.T) {
 }
 
 func TestService_UpdateBanner_UploadNotFound(t *testing.T) {
-	t.Parallel()
+
 	svc := NewService(&stubRepository{
 		findCompletedUploadByOwner: func(_ context.Context, _, _ uuid.UUID) error {
 			return ErrUploadNotFound

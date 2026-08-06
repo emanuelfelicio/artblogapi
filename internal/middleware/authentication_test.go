@@ -25,7 +25,6 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 func TestAuthentication_MissingHeader(t *testing.T) {
-	t.Parallel()
 
 	svc, err := token.NewTokenProvider([]byte(testJWTSecretString), testJWTIssuer, testJWTTTL, time.Hour)
 	if err != nil {
@@ -51,7 +50,6 @@ func TestAuthentication_MissingHeader(t *testing.T) {
 }
 
 func TestAuthentication_InvalidToken(t *testing.T) {
-	t.Parallel()
 
 	svc, err := token.NewTokenProvider([]byte(testJWTSecretString), testJWTIssuer, testJWTTTL, time.Hour)
 	if err != nil {
@@ -78,7 +76,6 @@ func TestAuthentication_InvalidToken(t *testing.T) {
 }
 
 func TestAuthentication_Success(t *testing.T) {
-	t.Parallel()
 
 	svc, err := token.NewTokenProvider([]byte(testJWTSecretString), testJWTIssuer, testJWTTTL, time.Hour)
 	if err != nil {
@@ -95,7 +92,7 @@ func TestAuthentication_Success(t *testing.T) {
 
 	r := gin.New()
 	r.GET("/protected", middleware.Authentication(svc), func(c *gin.Context) {
-		v, ok := c.Get(middleware.ContextAuthPrincipalKey)
+		v, ok := c.Get(auth.ContextAuthPrincipalKey)
 		if !ok {
 			c.Status(http.StatusInternalServerError)
 			return

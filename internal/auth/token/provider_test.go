@@ -12,7 +12,6 @@ import (
 )
 
 func TestJWT_GenerateAndVerify_Success(t *testing.T) {
-	t.Parallel()
 
 	var (
 		secret     = "test-secret"
@@ -46,7 +45,6 @@ func TestJWT_GenerateAndVerify_Success(t *testing.T) {
 }
 
 func TestJWT_VerifyAccessToken_Errors(t *testing.T) {
-	t.Parallel()
 
 	const (
 		secret = "test-secret"
@@ -82,7 +80,6 @@ func TestJWT_VerifyAccessToken_Errors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 
 			_, err := tokenService.VerifyAccessToken(tt.token)
 			if err == nil {

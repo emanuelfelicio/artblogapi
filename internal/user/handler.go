@@ -75,8 +75,10 @@ func (h *handler) GetPublicProfile(c *gin.Context) {
 //	@Failure		500	{object}	response.ErrorResponse[any]
 //	@Router			/users/me [get]
 func (h *handler) GetMyProfile(c *gin.Context) {
-	userID, ok := h.mustUserID(c)
-	if !ok {
+	userID, err := auth.GetUserID(c)
+	if err != nil {
+		h.logger.Error("auth_error", slog.Any("err", err))
+		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "internal error")
 		return
 	}
 
@@ -119,8 +121,10 @@ func (h *handler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	userID, ok := h.mustUserID(c)
-	if !ok {
+	userID, err := auth.GetUserID(c)
+	if err != nil {
+		h.logger.Error("auth_error", slog.Any("err", err))
+		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "internal error")
 		return
 	}
 
@@ -159,8 +163,10 @@ func (h *handler) UpdateAvatar(c *gin.Context) {
 		return
 	}
 
-	userID, ok := h.mustUserID(c)
-	if !ok {
+	userID, err := auth.GetUserID(c)
+	if err != nil {
+		h.logger.Error("auth_error", slog.Any("err", err))
+		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "internal error")
 		return
 	}
 
@@ -202,8 +208,10 @@ func (h *handler) UpdateBanner(c *gin.Context) {
 		return
 	}
 
-	userID, ok := h.mustUserID(c)
-	if !ok {
+	userID, err := auth.GetUserID(c)
+	if err != nil {
+		h.logger.Error("auth_error", slog.Any("err", err))
+		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "internal error")
 		return
 	}
 
@@ -218,34 +226,6 @@ func (h *handler) UpdateBanner(c *gin.Context) {
 	}
 
 	response.SuccessNoContent(c, http.StatusNoContent)
-}
-
-// mustUserID extracts the authenticated user ID from context. All failure
-// branches return 500 because the middleware is responsible for setting the
-// principal; reaching here without it indicates a wiring bug, not a client error.
-func (h *handler) mustUserID(c *gin.Context) (uuid.UUID, bool) {
-	raw, exists := c.Get("auth.principal")
-	if !exists {
-		h.logger.Error("auth_principal_missing_from_context")
-		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "internal error")
-		return uuid.Nil, false
-	}
-
-	principal, ok := raw.(auth.AuthPrincipal)
-	if !ok {
-		h.logger.Error("invalid_auth_principal", slog.Any("principal", raw))
-		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "internal error")
-		return uuid.Nil, false
-	}
-
-	userID, err := uuid.Parse(principal.UserID)
-	if err != nil {
-		h.logger.Error("invalid_user_id_in_principal", slog.String("user_id", principal.UserID), slog.Any("err", err))
-		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "internal error")
-		return uuid.Nil, false
-	}
-
-	return userID, true
 }
 
 // resolveURL builds the full CDN URL for a storage key. When cdnBase is empty

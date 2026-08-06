@@ -244,23 +244,9 @@ func (h *handler) Refresh(c *gin.Context) {
 func (h *handler) Logout(c *gin.Context) {
 	refreshToken, _ := c.Cookie(h.cookie.Name)
 
-	principalAny, exists := c.Get("auth.principal")
-	if !exists {
-		h.logger.Error("auth_principal_missing_from_context")
-		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "error trying to logout")
-		return
-	}
-
-	principal, ok := principalAny.(AuthPrincipal)
-	if !ok {
-		h.logger.Error("logout_failed_invalid_principal", slog.Any("principal", principalAny))
-		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "error trying to logout")
-		return
-	}
-
-	userID, err := uuid.Parse(principal.UserID)
+	userID, err := GetUserID(c)
 	if err != nil {
-		h.logger.Error("logout_failed_invalid_uuid", slog.String("user_id", principal.UserID), slog.Any("err", err))
+		h.logger.Error("logout_failed_auth_error", slog.Any("err", err))
 		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "error trying to logout")
 		return
 	}

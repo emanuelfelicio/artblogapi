@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -11,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/emanuelfelicio/artblogapi/internal/testutil/testhttp"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -75,28 +75,9 @@ func setupTestHandler(t *testing.T, s AuthService) *gin.Engine {
 	return r
 }
 
-func performRequest(t *testing.T, r http.Handler, method, path string, body any) *httptest.ResponseRecorder {
-	t.Helper()
-	var bodyReader io.Reader
-	if body != nil {
-		b, err := json.Marshal(body)
-		if err != nil {
-			t.Fatalf("failed to marshal body: %v", err)
-		}
-		bodyReader = strings.NewReader(string(b))
-	}
-
-	req := httptest.NewRequest(method, path, bodyReader)
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	return w
-}
-
 // --- TESTS ---
 
 func TestHandler_Register(t *testing.T) {
-	t.Parallel()
 
 	const (
 		username = "john.doe"
@@ -191,13 +172,13 @@ func TestHandler_Register(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+
 			stub := &stubAuthService{}
 			if tt.setupMock != nil {
 				tt.setupMock(stub)
 			}
 			r := setupTestHandler(t, stub)
-			w := performRequest(t, r, http.MethodPost, "/register", tt.payload)
+			w := testhttp.DoRequest(t, r, http.MethodPost, "/register", tt.payload)
 
 			if w.Code != tt.expectedStatus {
 				t.Errorf("expected status %d, got %d", tt.expectedStatus, w.Code)
@@ -210,7 +191,6 @@ func TestHandler_Register(t *testing.T) {
 }
 
 func TestHandler_Login(t *testing.T) {
-	t.Parallel()
 
 	const (
 		credential = "john.doe"
@@ -289,13 +269,13 @@ func TestHandler_Login(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+
 			stub := &stubAuthService{}
 			if tt.setupMock != nil {
 				tt.setupMock(stub)
 			}
 			r := setupTestHandler(t, stub)
-			w := performRequest(t, r, http.MethodPost, "/login", tt.payload)
+			w := testhttp.DoRequest(t, r, http.MethodPost, "/login", tt.payload)
 
 			if w.Code != tt.expectedStatus {
 				t.Errorf("expected status %d, got %d", tt.expectedStatus, w.Code)
@@ -308,7 +288,6 @@ func TestHandler_Login(t *testing.T) {
 }
 
 func TestHandler_Refresh(t *testing.T) {
-	t.Parallel()
 
 	const validToken = "valid-token"
 
@@ -365,7 +344,7 @@ func TestHandler_Refresh(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+
 			stub := &stubAuthService{}
 			if tt.setupMock != nil {
 				tt.setupMock(stub)
@@ -387,7 +366,6 @@ func TestHandler_Refresh(t *testing.T) {
 }
 
 func TestHandler_Logout(t *testing.T) {
-	t.Parallel()
 
 	var capturedToken string
 	var capturedUserID uuid.UUID
@@ -430,7 +408,6 @@ func TestHandler_Logout(t *testing.T) {
 }
 
 func TestHandler_Logout_Failure(t *testing.T) {
-	t.Parallel()
 
 	stub := &stubAuthService{}
 	stub.logout = func(ctx context.Context, refreshToken string, currentUserID uuid.UUID) error {
