@@ -14,3 +14,15 @@ type InitUploadResponse struct {
 	UploadID  uuid.UUID `json:"upload_id"`
 	UploadURL string    `json:"upload_url"`
 }
+
+// CompleteUploadRequest represents the request to complete an upload
+type CompleteUploadRequest struct {
+	UploadID string `json:"upload_id" binding:"required,uuid"`
+}
+
+// UploadStatusResponse represents the status response of an upload
+type UploadStatusResponse struct {
+	ID            uuid.UUID    `json:"id"`
+	Status        UploadStatus `json:"status"`
+	FailureReason *string      `json:"failure_reason"`
+}

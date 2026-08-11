@@ -14,7 +14,9 @@ import (
 // --- STUBS ---
 
 type stubRepository struct {
-	create func(ctx context.Context, u Upload) (uuid.UUID, error)
+	create              func(ctx context.Context, u Upload) (uuid.UUID, error)
+	getByID             func(ctx context.Context, id uuid.UUID) (Upload, error)
+	setStatusProcessing func(ctx context.Context, id uuid.UUID) error
 }
 
 func (s *stubRepository) Create(ctx context.Context, u Upload) (uuid.UUID, error) {
@@ -24,8 +26,23 @@ func (s *stubRepository) Create(ctx context.Context, u Upload) (uuid.UUID, error
 	return u.ID, nil
 }
 
+func (s *stubRepository) GetByID(ctx context.Context, id uuid.UUID) (Upload, error) {
+	if s.getByID != nil {
+		return s.getByID(ctx, id)
+	}
+	return Upload{}, nil
+}
+
+func (s *stubRepository) SetStatusProcessing(ctx context.Context, id uuid.UUID) error {
+	if s.setStatusProcessing != nil {
+		return s.setStatusProcessing(ctx, id)
+	}
+	return nil
+}
+
 type stubStorageProvider struct {
 	generateUploadURL func(ctx context.Context, key string, expires time.Duration) (string, error)
+	objectExists      func(ctx context.Context, key string) (bool, error)
 }
 
 func (s *stubStorageProvider) GenerateUploadURL(ctx context.Context, key string, expires time.Duration) (string, error) {
@@ -47,13 +64,23 @@ func (s *stubStorageProvider) DeleteObject(_ context.Context, _ string) error {
 	return nil
 }
 
-func (s *stubStorageProvider) ObjectExists(_ context.Context, _ string) (bool, error) {
+func (s *stubStorageProvider) ObjectExists(ctx context.Context, key string) (bool, error) {
+	if s.objectExists != nil {
+		return s.objectExists(ctx, key)
+	}
 	return false, nil
 }
 
-type stubUploadProcessor struct{}
+type stubUploadProcessor struct {
+	enqueue func(ctx context.Context, id uuid.UUID) error
+}
 
-func (s *stubUploadProcessor) Enqueue(_ context.Context, _ uuid.UUID) error { return nil }
+func (s *stubUploadProcessor) Enqueue(ctx context.Context, id uuid.UUID) error {
+	if s.enqueue != nil {
+		return s.enqueue(ctx, id)
+	}
+	return nil
+}
 
 // --- HELPERS ---
 
@@ -61,6 +88,11 @@ func newTestService(repo Repository, provider StorageProvider) *Service {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	worker := &stubUploadProcessor{}
 	return NewService(repo, provider, worker, 15*time.Minute, logger)
+}
+
+func newTestServiceWithProcessor(repo Repository, provider StorageProvider, processor UploadProcessor) *Service {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	return NewService(repo, provider, processor, 15*time.Minute, logger)
 }
 
 // --- TESTS ---
@@ -343,5 +375,340 @@ func TestService_InitUpload_PresignTTLSpy(t *testing.T) {
 
 	if capturedTTL != expectedTTL {
 		t.Fatalf("expected presign TTL %v, got %v", expectedTTL, capturedTTL)
+	}
+}
+
+func TestService_CompleteUpload(t *testing.T) {
+	ownerID := uuid.New()
+	uploadID := uuid.New()
+	ctx := context.Background()
+
+	pendingUpload := Upload{
+		ID:        uploadID,
+		UserID:    ownerID,
+		ObjectKey: BucketPrefixQuarantine + uploadID.String(),
+		Status:    UploadStatusPENDING,
+		Purpose:   PurposeAVATAR,
+	}
+
+	tests := []struct {
+		name      string
+		userID    uuid.UUID
+		uploadID  uuid.UUID
+		repo      *stubRepository
+		provider  *stubStorageProvider
+		processor *stubUploadProcessor
+		wantErr   error
+	}{
+		{
+			name:     "success",
+			userID:   ownerID,
+			uploadID: uploadID,
+			repo: &stubRepository{
+				getByID: func(_ context.Context, _ uuid.UUID) (Upload, error) {
+					return pendingUpload, nil
+				},
+			},
+			provider: &stubStorageProvider{
+				objectExists: func(_ context.Context, _ string) (bool, error) {
+					return true, nil
+				},
+			},
+			processor: &stubUploadProcessor{},
+		},
+		{
+			name:     "upload not found",
+			userID:   ownerID,
+			uploadID: uuid.New(),
+			repo: &stubRepository{
+				getByID: func(_ context.Context, _ uuid.UUID) (Upload, error) {
+					return Upload{}, ErrUploadNotFound
+				},
+			},
+			provider:  &stubStorageProvider{},
+			processor: &stubUploadProcessor{},
+			wantErr:   ErrUploadNotFound,
+		},
+		{
+			name:     "upload belongs to another user",
+			userID:   uuid.New(),
+			uploadID: uploadID,
+			repo: &stubRepository{
+				getByID: func(_ context.Context, _ uuid.UUID) (Upload, error) {
+					return pendingUpload, nil
+				},
+			},
+			provider:  &stubStorageProvider{},
+			processor: &stubUploadProcessor{},
+			wantErr:   ErrUploadNotOwned,
+		},
+		{
+			name:     "upload not in PENDING status",
+			userID:   ownerID,
+			uploadID: uploadID,
+			repo: &stubRepository{
+				getByID: func(_ context.Context, _ uuid.UUID) (Upload, error) {
+					u := pendingUpload
+					u.Status = UploadStatusCOMPLETED
+					return u, nil
+				},
+			},
+			provider:  &stubStorageProvider{},
+			processor: &stubUploadProcessor{},
+			wantErr:   ErrUploadNotPending,
+		},
+		{
+			name:     "file not in quarantine bucket",
+			userID:   ownerID,
+			uploadID: uploadID,
+			repo: &stubRepository{
+				getByID: func(_ context.Context, _ uuid.UUID) (Upload, error) {
+					return pendingUpload, nil
+				},
+			},
+			provider: &stubStorageProvider{
+				objectExists: func(_ context.Context, _ string) (bool, error) {
+					return false, nil
+				},
+			},
+			processor: &stubUploadProcessor{},
+			wantErr:   ErrFileNotInQuarantine,
+		},
+		{
+			name:     "storage provider ObjectExists error",
+			userID:   ownerID,
+			uploadID: uploadID,
+			repo: &stubRepository{
+				getByID: func(_ context.Context, _ uuid.UUID) (Upload, error) {
+					return pendingUpload, nil
+				},
+			},
+			provider: &stubStorageProvider{
+				objectExists: func(_ context.Context, _ string) (bool, error) {
+					return false, errors.New("s3 timeout")
+				},
+			},
+			processor: &stubUploadProcessor{},
+			wantErr:   errors.New("check_quarantine_object"),
+		},
+		{
+			name:     "repo SetStatusProcessing error",
+			userID:   ownerID,
+			uploadID: uploadID,
+			repo: &stubRepository{
+				getByID: func(_ context.Context, _ uuid.UUID) (Upload, error) {
+					return pendingUpload, nil
+				},
+				setStatusProcessing: func(_ context.Context, _ uuid.UUID) error {
+					return errors.New("db write failed")
+				},
+			},
+			provider: &stubStorageProvider{
+				objectExists: func(_ context.Context, _ string) (bool, error) {
+					return true, nil
+				},
+			},
+			processor: &stubUploadProcessor{},
+			wantErr:   errors.New("db write failed"),
+		},
+		{
+			name:     "enqueue failure propagates error",
+			userID:   ownerID,
+			uploadID: uploadID,
+			repo: &stubRepository{
+				getByID: func(_ context.Context, _ uuid.UUID) (Upload, error) {
+					return pendingUpload, nil
+				},
+			},
+			provider: &stubStorageProvider{
+				objectExists: func(_ context.Context, _ string) (bool, error) {
+					return true, nil
+				},
+			},
+			processor: &stubUploadProcessor{
+				enqueue: func(_ context.Context, _ uuid.UUID) error {
+					return errors.New("channel full")
+				},
+			},
+			wantErr: errors.New("enqueue_upload"),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := newTestServiceWithProcessor(tc.repo, tc.provider, tc.processor)
+			err := svc.CompleteUpload(ctx, tc.userID, tc.uploadID)
+
+			if tc.wantErr != nil {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tc.wantErr.Error())
+				}
+
+				if errors.Is(tc.wantErr, ErrUploadNotFound) ||
+					errors.Is(tc.wantErr, ErrUploadNotOwned) ||
+					errors.Is(tc.wantErr, ErrUploadNotPending) ||
+					errors.Is(tc.wantErr, ErrFileNotInQuarantine) {
+					if !errors.Is(err, tc.wantErr) {
+						t.Fatalf("expected error %v, got %v", tc.wantErr, err)
+					}
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestService_CompleteUpload_QuarantineKeySpy(t *testing.T) {
+	ownerID := uuid.New()
+	uploadID := uuid.New()
+
+	var capturedKey string
+	repo := &stubRepository{
+		getByID: func(_ context.Context, _ uuid.UUID) (Upload, error) {
+			return Upload{
+				ID:     uploadID,
+				UserID: ownerID,
+				Status: UploadStatusPENDING,
+			}, nil
+		},
+	}
+	provider := &stubStorageProvider{
+		objectExists: func(_ context.Context, key string) (bool, error) {
+			capturedKey = key
+			return true, nil
+		},
+	}
+
+	svc := newTestService(repo, provider)
+	err := svc.CompleteUpload(context.Background(), ownerID, uploadID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expectedKey := BucketPrefixQuarantine + uploadID.String()
+	if capturedKey != expectedKey {
+		t.Fatalf("expected quarantine key %q, got %q", expectedKey, capturedKey)
+	}
+}
+
+func TestService_CompleteUpload_EnqueueSpy(t *testing.T) {
+	ownerID := uuid.New()
+	uploadID := uuid.New()
+
+	var enqueuedID uuid.UUID
+	repo := &stubRepository{
+		getByID: func(_ context.Context, _ uuid.UUID) (Upload, error) {
+			return Upload{
+				ID:     uploadID,
+				UserID: ownerID,
+				Status: UploadStatusPENDING,
+			}, nil
+		},
+	}
+	provider := &stubStorageProvider{
+		objectExists: func(_ context.Context, _ string) (bool, error) {
+			return true, nil
+		},
+	}
+	processor := &stubUploadProcessor{
+		enqueue: func(_ context.Context, id uuid.UUID) error {
+			enqueuedID = id
+			return nil
+		},
+	}
+
+	svc := newTestServiceWithProcessor(repo, provider, processor)
+	err := svc.CompleteUpload(context.Background(), ownerID, uploadID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if enqueuedID != uploadID {
+		t.Fatalf("expected enqueued upload ID %s, got %s", uploadID, enqueuedID)
+	}
+}
+
+func TestService_GetUploadStatus(t *testing.T) {
+	ownerID := uuid.New()
+	uploadID := uuid.New()
+	ctx := context.Background()
+
+	mockUpload := Upload{
+		ID:        uploadID,
+		UserID:    ownerID,
+		Status:    UploadStatusCOMPLETED,
+		ObjectKey: "final/some-key.webp",
+	}
+
+	tests := []struct {
+		name     string
+		userID   uuid.UUID
+		uploadID uuid.UUID
+		repo     *stubRepository
+		wantRes  Upload
+		wantErr  error
+	}{
+		{
+			name:     "success",
+			userID:   ownerID,
+			uploadID: uploadID,
+			repo: &stubRepository{
+				getByID: func(_ context.Context, _ uuid.UUID) (Upload, error) {
+					return mockUpload, nil
+				},
+			},
+			wantRes: mockUpload,
+		},
+		{
+			name:     "upload not found",
+			userID:   ownerID,
+			uploadID: uploadID,
+			repo: &stubRepository{
+				getByID: func(_ context.Context, _ uuid.UUID) (Upload, error) {
+					return Upload{}, ErrUploadNotFound
+				},
+			},
+			wantErr: ErrUploadNotFound,
+		},
+		{
+			name:     "not owned",
+			userID:   uuid.New(),
+			uploadID: uploadID,
+			repo: &stubRepository{
+				getByID: func(_ context.Context, _ uuid.UUID) (Upload, error) {
+					return mockUpload, nil
+				},
+			},
+			wantErr: ErrUploadNotOwned,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := newTestService(tc.repo, &stubStorageProvider{})
+			res, err := svc.GetUploadStatus(ctx, tc.userID, tc.uploadID)
+
+			if tc.wantErr != nil {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tc.wantErr.Error())
+				}
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("expected error %v, got %v", tc.wantErr, err)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if res.ID != tc.wantRes.ID || res.Status != tc.wantRes.Status || res.UserID != tc.wantRes.UserID {
+				t.Fatalf("unexpected result: %+v", res)
+			}
+		})
 	}
 }

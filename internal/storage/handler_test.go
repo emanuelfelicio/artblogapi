@@ -18,7 +18,9 @@ import (
 // --- STUBS ---
 
 type stubStorageService struct {
-	initUpload func(ctx context.Context, userID uuid.UUID, purpose string, fileSize int, contentType string) (uuid.UUID, string, error)
+	initUpload      func(ctx context.Context, userID uuid.UUID, purpose string, fileSize int, contentType string) (uuid.UUID, string, error)
+	completeUpload  func(ctx context.Context, userID uuid.UUID, uploadID uuid.UUID) error
+	getUploadStatus func(ctx context.Context, userID uuid.UUID, uploadID uuid.UUID) (Upload, error)
 }
 
 func (s *stubStorageService) InitUpload(ctx context.Context, userID uuid.UUID, purpose string, fileSize int, contentType string) (uuid.UUID, string, error) {
@@ -26,6 +28,20 @@ func (s *stubStorageService) InitUpload(ctx context.Context, userID uuid.UUID, p
 		return s.initUpload(ctx, userID, purpose, fileSize, contentType)
 	}
 	return uuid.New(), "https://s3.example.com/presigned", nil
+}
+
+func (s *stubStorageService) CompleteUpload(ctx context.Context, userID uuid.UUID, uploadID uuid.UUID) error {
+	if s.completeUpload != nil {
+		return s.completeUpload(ctx, userID, uploadID)
+	}
+	return nil
+}
+
+func (s *stubStorageService) GetUploadStatus(ctx context.Context, userID uuid.UUID, uploadID uuid.UUID) (Upload, error) {
+	if s.getUploadStatus != nil {
+		return s.getUploadStatus(ctx, userID, uploadID)
+	}
+	return Upload{}, nil
 }
 
 func TestMain(m *testing.M) {
@@ -141,6 +157,181 @@ func TestHandler_InitUpload(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			r := setupTestRouter(tc.svc, testauth.WithPrincipal(uuid.NewString()))
 			w := testhttp.DoRequest(t, r, http.MethodPost, "/api/v1/uploads/init", tc.body)
+
+			if w.Code != tc.wantStatus {
+				t.Fatalf("expected %d, got %d: %s", tc.wantStatus, w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+// --- POST /uploads/complete ---
+
+func TestHandler_CompleteUpload(t *testing.T) {
+	validBody := map[string]any{
+		"upload_id": uuid.NewString(),
+	}
+
+	tests := []struct {
+		name       string
+		body       any
+		svc        *stubStorageService
+		wantStatus int
+	}{
+		{
+			name:       "202 accepted",
+			body:       validBody,
+			svc:        &stubStorageService{},
+			wantStatus: http.StatusAccepted,
+		},
+		{
+			name:       "400 missing upload_id",
+			body:       map[string]any{},
+			svc:        &stubStorageService{},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "400 invalid uuid format",
+			body:       map[string]any{"upload_id": "not-a-uuid"},
+			svc:        &stubStorageService{},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name: "404 upload not found",
+			body: validBody,
+			svc: &stubStorageService{
+				completeUpload: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) error {
+					return ErrUploadNotFound
+				},
+			},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name: "403 upload not owned",
+			body: validBody,
+			svc: &stubStorageService{
+				completeUpload: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) error {
+					return ErrUploadNotOwned
+				},
+			},
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name: "409 upload not pending",
+			body: validBody,
+			svc: &stubStorageService{
+				completeUpload: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) error {
+					return ErrUploadNotPending
+				},
+			},
+			wantStatus: http.StatusConflict,
+		},
+		{
+			name: "422 file not in quarantine",
+			body: validBody,
+			svc: &stubStorageService{
+				completeUpload: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) error {
+					return ErrFileNotInQuarantine
+				},
+			},
+			wantStatus: http.StatusUnprocessableEntity,
+		},
+		{
+			name: "500 unexpected service error",
+			body: validBody,
+			svc: &stubStorageService{
+				completeUpload: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) error {
+					return fmt.Errorf("db timeout")
+				},
+			},
+			wantStatus: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			r := setupTestRouter(tc.svc, testauth.WithPrincipal(uuid.NewString()))
+			w := testhttp.DoRequest(t, r, http.MethodPost, "/api/v1/uploads/complete", tc.body)
+
+			if w.Code != tc.wantStatus {
+				t.Fatalf("expected %d, got %d: %s", tc.wantStatus, w.Code, w.Body.String())
+			}
+
+			if w.Code == http.StatusAccepted && w.Body.Len() != 0 {
+				t.Fatalf("expected empty body for 202 Accepted, got %s", w.Body.String())
+			}
+		})
+	}
+}
+
+// --- GET /uploads/:id ---
+
+func TestHandler_GetUploadStatus(t *testing.T) {
+	uploadID := uuid.New()
+	userID := uuid.New()
+
+	tests := []struct {
+		name       string
+		idParam    string
+		svc        *stubStorageService
+		wantStatus int
+	}{
+		{
+			name:    "200 ok",
+			idParam: uploadID.String(),
+			svc: &stubStorageService{
+				getUploadStatus: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (Upload, error) {
+					return Upload{
+						ID:     uploadID,
+						UserID: userID,
+						Status: UploadStatusCOMPLETED,
+					}, nil
+				},
+			},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "400 invalid uuid format",
+			idParam:    "not-a-uuid",
+			svc:        &stubStorageService{},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:    "404 not found",
+			idParam: uploadID.String(),
+			svc: &stubStorageService{
+				getUploadStatus: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (Upload, error) {
+					return Upload{}, ErrUploadNotFound
+				},
+			},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:    "403 forbidden",
+			idParam: uploadID.String(),
+			svc: &stubStorageService{
+				getUploadStatus: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (Upload, error) {
+					return Upload{}, ErrUploadNotOwned
+				},
+			},
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name:    "500 unexpected service error",
+			idParam: uploadID.String(),
+			svc: &stubStorageService{
+				getUploadStatus: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (Upload, error) {
+					return Upload{}, fmt.Errorf("db timeout")
+				},
+			},
+			wantStatus: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			r := setupTestRouter(tc.svc, testauth.WithPrincipal(userID.String()))
+			w := testhttp.DoRequest(t, r, http.MethodGet, "/api/v1/uploads/"+tc.idParam, nil)
 
 			if w.Code != tc.wantStatus {
 				t.Fatalf("expected %d, got %d: %s", tc.wantStatus, w.Code, w.Body.String())

@@ -11,6 +11,8 @@ import (
 
 type Repository interface {
 	Create(ctx context.Context, u Upload) (uuid.UUID, error)
+	GetByID(ctx context.Context, id uuid.UUID) (Upload, error)
+	SetStatusProcessing(ctx context.Context, id uuid.UUID) error
 }
 
 type Service struct {
@@ -69,4 +71,51 @@ func (s *Service) InitUpload(ctx context.Context, userID uuid.UUID, purpose stri
 	}
 
 	return uploadID, presignedURL, nil
+}
+
+func (s *Service) CompleteUpload(ctx context.Context, userID uuid.UUID, uploadID uuid.UUID) error {
+	upload, err := s.repo.GetByID(ctx, uploadID)
+	if err != nil {
+		return err
+	}
+
+	if upload.UserID != userID {
+		return ErrUploadNotOwned
+	}
+
+	if upload.Status != UploadStatusPENDING {
+		return ErrUploadNotPending
+	}
+
+	quarantineKey := BucketPrefixQuarantine + uploadID.String()
+	exists, err := s.provider.ObjectExists(ctx, quarantineKey)
+	if err != nil {
+		return fmt.Errorf("check_quarantine_object: %w", err)
+	}
+	if !exists {
+		return ErrFileNotInQuarantine
+	}
+
+	if err := s.repo.SetStatusProcessing(ctx, uploadID); err != nil {
+		return err
+	}
+
+	if err := s.processor.Enqueue(ctx, uploadID); err != nil {
+		return fmt.Errorf("enqueue_upload: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Service) GetUploadStatus(ctx context.Context, userID uuid.UUID, uploadID uuid.UUID) (Upload, error) {
+	upload, err := s.repo.GetByID(ctx, uploadID)
+	if err != nil {
+		return Upload{}, err
+	}
+
+	if upload.UserID != userID {
+		return Upload{}, ErrUploadNotOwned
+	}
+
+	return upload, nil
 }
