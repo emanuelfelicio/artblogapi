@@ -15,7 +15,7 @@ import (
 const createUpload = `-- name: CreateUpload :one
 INSERT INTO uploads (id, user_id, object_key, status, purpose, file_size, content_type)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, status, purpose, object_key
+RETURNING id
 `
 
 type CreateUploadParams struct {
@@ -28,14 +28,7 @@ type CreateUploadParams struct {
 	ContentType pgtype.Text
 }
 
-type CreateUploadRow struct {
-	ID        uuid.UUID
-	Status    UploadStatus
-	Purpose   UploadPurpose
-	ObjectKey string
-}
-
-func (q *Queries) CreateUpload(ctx context.Context, arg CreateUploadParams) (CreateUploadRow, error) {
+func (q *Queries) CreateUpload(ctx context.Context, arg CreateUploadParams) (uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, createUpload,
 		arg.ID,
 		arg.UserID,
@@ -45,14 +38,9 @@ func (q *Queries) CreateUpload(ctx context.Context, arg CreateUploadParams) (Cre
 		arg.FileSize,
 		arg.ContentType,
 	)
-	var i CreateUploadRow
-	err := row.Scan(
-		&i.ID,
-		&i.Status,
-		&i.Purpose,
-		&i.ObjectKey,
-	)
-	return i, err
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const getUploadByID = `-- name: GetUploadByID :one

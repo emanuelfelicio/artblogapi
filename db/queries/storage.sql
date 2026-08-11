@@ -1,7 +1,7 @@
 -- name: CreateUpload :one
 INSERT INTO uploads (id, user_id, object_key, status, purpose, file_size, content_type)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, status, purpose, object_key;
+RETURNING id;
 
 -- name: GetUploadByID :one
 SELECT id, user_id, object_key, status, purpose, file_size, content_type, failure_reason, created_at, updated_at
