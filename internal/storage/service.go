@@ -31,6 +31,10 @@ func (s *Service) InitUpload(ctx context.Context, userID uuid.UUID, purpose stri
 		return uuid.Nil, "", ErrInvalidPurpose
 	}
 
+	if err := upPurpose.ValidateFileSize(fileSize); err != nil {
+		return uuid.Nil, "", err
+	}
+
 	imgContentType := ImageContentType(contentType)
 
 	if !imgContentType.Valid() {

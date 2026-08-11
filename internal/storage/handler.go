@@ -48,11 +48,7 @@ func (h *handler) InitUpload(c *gin.Context) {
 
 	uploadID, uploadURL, err := h.service.InitUpload(c.Request.Context(), userID, req.Purpose, int(req.FileSize), req.ContentType)
 	if err != nil {
-		if errors.Is(err, ErrInvalidPurpose) {
-			response.Fail(c, http.StatusBadRequest, response.ValidationCode, "invalid upload purpose")
-			return
-		}
-		if errors.Is(err, ErrFileSizeExceeded) || errors.Is(err, ErrInvalidFileSize) || errors.Is(err, ErrInvaliImageContentType) {
+		if errors.Is(err, ErrFileSizeExceeded) || errors.Is(err, ErrInvalidFileSize) || errors.Is(err, ErrInvaliImageContentType) || errors.Is(err, ErrInvalidPurpose) {
 			response.Fail(c, http.StatusBadRequest, response.ValidationCode, err.Error())
 			return
 		}
