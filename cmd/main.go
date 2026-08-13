@@ -17,6 +17,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	swaggerfiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
+
+	awsS3 "github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/emanuelfelicio/artblogapi/internal/storage"
+	storageS3 "github.com/emanuelfelicio/artblogapi/internal/storage/s3"
+	"github.com/google/uuid"
 )
 
 // @title						Artblog API
@@ -65,6 +70,38 @@ func main() {
 	userService := user.NewService(userRepo)
 	userHandler := user.NewHandler(userService, logger, cfg.CDNBaseURL, cfg.DefaultAvatarURL, cfg.DefaultBannerURL)
 
+	// S3 Client Bootstrap
+	s3Client, err := storageS3.InitS3Client(
+		ctx,
+		cfg.S3Endpoint,
+		cfg.S3Region,
+		cfg.S3AccessKey,
+		cfg.S3SecretKey,
+		cfg.S3ForcePathStyle,
+	)
+	if err != nil {
+		logger.Error("s3_client_init_failed", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	logger.Info("s3_client_initialized")
+
+	// Storage Dependencies
+	storageRepo := storage.NewRepository(queries, pool)
+	storageProvider := storageS3.NewS3StorageProvider(
+		s3Client,
+		awsS3.NewPresignClient(s3Client),
+		cfg.S3Bucket,
+	)
+	storageProcessor := &dummyUploadProcessor{logger: logger}
+	storageService := storage.NewService(
+		storageRepo,
+		storageProvider,
+		storageProcessor,
+		cfg.S3PresignTTL,
+		logger,
+	)
+	storageHandler := storage.NewHandler(storageService, logger)
+
 	if cfg.AppEnv == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	} else {
@@ -80,6 +117,7 @@ func main() {
 	{
 		auth.Routes(v1, authHandler, authMiddleware)
 		user.Routes(v1, userHandler, authMiddleware)
+		storage.Routes(v1, storageHandler, authMiddleware)
 	}
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
 
@@ -88,4 +126,13 @@ func main() {
 		logger.Error("server_start_failed", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
+}
+
+type dummyUploadProcessor struct {
+	logger *slog.Logger
+}
+
+func (d *dummyUploadProcessor) Enqueue(ctx context.Context, uploadID uuid.UUID) error {
+	d.logger.Info("dummy_enqueue_upload_triggered", slog.String("upload_id", uploadID.String()))
+	return nil
 }
