@@ -100,7 +100,7 @@ func (h *handler) CompleteUpload(c *gin.Context) {
 			response.Fail(c, http.StatusForbidden, response.ForbiddenCode, err.Error())
 		case errors.Is(err, ErrUploadNotPending):
 			response.Fail(c, http.StatusConflict, response.ConflictCode, err.Error())
-		case errors.Is(err, ErrFileNotInQuarantine):
+		case errors.Is(err, ErrFileNotFound):
 			response.Fail(c, http.StatusUnprocessableEntity, response.ValidationCode, err.Error())
 		default:
 			h.logger.Error("complete_upload_failed", slog.Any("err", err))

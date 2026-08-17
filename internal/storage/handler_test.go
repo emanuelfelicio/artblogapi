@@ -231,7 +231,7 @@ func TestHandler_CompleteUpload(t *testing.T) {
 			body: validBody,
 			svc: &stubStorageService{
 				completeUpload: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) error {
-					return ErrFileNotInQuarantine
+					return ErrFileNotFound
 				},
 			},
 			wantStatus: http.StatusUnprocessableEntity,

@@ -93,7 +93,7 @@ func (s *Service) CompleteUpload(ctx context.Context, userID uuid.UUID, uploadID
 		return fmt.Errorf("check_quarantine_object: %w", err)
 	}
 	if !exists {
-		return ErrFileNotInQuarantine
+		return ErrFileNotFound
 	}
 
 	if err := s.repo.SetStatusProcessing(ctx, uploadID); err != nil {

@@ -10,5 +10,5 @@ var (
 	ErrUploadNotFound         = errors.New("upload not found")
 	ErrUploadNotPending       = errors.New("upload is not in PENDING status")
 	ErrUploadNotOwned         = errors.New("upload does not belong to this user")
-	ErrFileNotInQuarantine    = errors.New("file not found in quarantine bucket")
+	ErrFileNotFound           = errors.New("file not found")
 )

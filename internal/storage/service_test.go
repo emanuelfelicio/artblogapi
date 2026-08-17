@@ -472,7 +472,7 @@ func TestService_CompleteUpload(t *testing.T) {
 				},
 			},
 			processor: &stubUploadProcessor{},
-			wantErr:   ErrFileNotInQuarantine,
+			wantErr:   ErrFileNotFound,
 		},
 		{
 			name:     "storage provider ObjectExists error",
@@ -547,7 +547,7 @@ func TestService_CompleteUpload(t *testing.T) {
 				if errors.Is(tc.wantErr, ErrUploadNotFound) ||
 					errors.Is(tc.wantErr, ErrUploadNotOwned) ||
 					errors.Is(tc.wantErr, ErrUploadNotPending) ||
-					errors.Is(tc.wantErr, ErrFileNotInQuarantine) {
+					errors.Is(tc.wantErr, ErrFileNotFound) {
 					if !errors.Is(err, tc.wantErr) {
 						t.Fatalf("expected error %v, got %v", tc.wantErr, err)
 					}

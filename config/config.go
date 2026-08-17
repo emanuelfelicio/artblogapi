@@ -60,7 +60,7 @@ func LoadConfig() Config {
 		RefreshTokenTTL:     7 * 24 * time.Hour,
 		RefreshCookieDomain: getEnvOrDefault("REFRESH_TOKEN_COOKIE_DOMAIN", ""),
 		RefreshCookieSecure: getEnvOrDefault("REFRESH_TOKEN_COOKIE_SECURE", "false") == "true",
-		CDNBaseURL:          getEnvOrDefault("CDN_BASE_URL", "http://localhost:9000/final"),
+		CDNBaseURL:          normalizeBaseUrl(getEnvOrDefault("CDN_BASE_URL", "http://localhost:9000")),
 		DefaultAvatarURL:    getEnvOrDefault("DEFAULT_AVATAR_URL", "https://cdn.artblog.io/defaults/avatar.png"),
 		DefaultBannerURL:    getEnvOrDefault("DEFAULT_BANNER_URL", "https://cdn.artblog.io/defaults/banner.png"),
 		S3Endpoint:          getEnvOrDefault("S3_ENDPOINT", "http://localhost:9000"),
@@ -91,4 +91,8 @@ func getEnvDurationOrDefault(key string, fallback time.Duration) time.Duration {
 		log.Fatalf("invalid duration for %s: %v", key, err)
 	}
 	return parsed
+}
+
+func normalizeBaseUrl(url string) string {
+	return strings.TrimRight(url, "/")
 }

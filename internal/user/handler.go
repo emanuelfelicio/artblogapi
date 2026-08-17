@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"strings"
 
 	"github.com/emanuelfelicio/artblogapi/config/response"
 	"github.com/emanuelfelicio/artblogapi/config/validation"
@@ -32,7 +31,7 @@ type handler struct {
 }
 
 func NewHandler(s UserService, l *slog.Logger, cdnBase, defaultAvatar, defaultBanner string) *handler {
-	return &handler{service: s, logger: l, cdnBase: strings.TrimRight(cdnBase, "/"), defaultAvatar: defaultAvatar, defaultBanner: defaultBanner}
+	return &handler{service: s, logger: l, cdnBase: cdnBase, defaultAvatar: defaultAvatar, defaultBanner: defaultBanner}
 }
 
 // GetPublicProfile godoc
