@@ -312,13 +312,13 @@ func TestService_InitUpload_ObjectKeyPrefixSpy(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(capturedUpload.ObjectKey) <= len(BucketPrefixQuarantine) {
+	if len(capturedUpload.ObjectKey) <= len(bucketPrefixQuarantine) {
 		t.Fatal("object key should contain the quarantine prefix + upload ID")
 	}
 
-	prefix := capturedUpload.ObjectKey[:len(BucketPrefixQuarantine)]
-	if prefix != BucketPrefixQuarantine {
-		t.Fatalf("expected object key prefix %q, got %q", BucketPrefixQuarantine, prefix)
+	prefix := capturedUpload.ObjectKey[:len(bucketPrefixQuarantine)]
+	if prefix != bucketPrefixQuarantine {
+		t.Fatalf("expected object key prefix %q, got %q", bucketPrefixQuarantine, prefix)
 	}
 }
 
@@ -386,7 +386,7 @@ func TestService_CompleteUpload(t *testing.T) {
 	pendingUpload := Upload{
 		ID:        uploadID,
 		UserID:    ownerID,
-		ObjectKey: BucketPrefixQuarantine + uploadID.String(),
+		ObjectKey: bucketPrefixQuarantine + uploadID.String(),
 		Status:    UploadStatusPENDING,
 		Purpose:   PurposeAVATAR,
 	}
@@ -589,7 +589,7 @@ func TestService_CompleteUpload_QuarantineKeySpy(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	expectedKey := BucketPrefixQuarantine + uploadID.String()
+	expectedKey := bucketPrefixQuarantine + uploadID.String()
 	if capturedKey != expectedKey {
 		t.Fatalf("expected quarantine key %q, got %q", expectedKey, capturedKey)
 	}

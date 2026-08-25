@@ -2,8 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	_ "github.com/emanuelfelicio/artblogapi/cmd/docs"
 	"github.com/emanuelfelicio/artblogapi/config"
@@ -20,8 +25,9 @@ import (
 
 	awsS3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/emanuelfelicio/artblogapi/internal/storage"
+	storageImage "github.com/emanuelfelicio/artblogapi/internal/storage/image"
 	storageS3 "github.com/emanuelfelicio/artblogapi/internal/storage/s3"
-	"github.com/google/uuid"
+	"github.com/emanuelfelicio/artblogapi/internal/storage/worker"
 )
 
 // @title						Artblog API
@@ -85,18 +91,39 @@ func main() {
 	}
 	logger.Info("s3_client_initialized")
 
-	// Storage Dependencies
+	// Storage Dependencies & Background Worker
 	storageRepo := storage.NewRepository(queries, pool)
 	storageProvider := storageS3.NewS3StorageProvider(
 		s3Client,
 		awsS3.NewPresignClient(s3Client),
 		cfg.S3Bucket,
 	)
-	storageProcessor := &dummyUploadProcessor{logger: logger}
+	imageProcessor := storageImage.NewDummy()
+	workerTriggerChan := make(chan struct{}, cfg.WorkerConcurrency)
+	workerCfg := worker.Config{
+		Concurrency:       cfg.WorkerConcurrency,
+		TickerInterval:    cfg.WorkerTickerInterval,
+		StaleThreshold:    cfg.WorkerStaleThreshold,
+		HeartbeatInterval: cfg.WorkerHeartbeatInterval,
+		BackoffInterval:   cfg.WorkerBackoffInterval,
+		MaxRetries:        cfg.WorkerMaxRetries,
+	}
+	imageWorker := worker.New(
+		storageRepo,
+		storageProvider,
+		imageProcessor,
+		workerTriggerChan,
+		workerCfg,
+		logger,
+	)
+
+	workerCtx, cancelWorker := context.WithCancel(context.Background())
+	go imageWorker.Start(workerCtx)
+
 	storageService := storage.NewService(
 		storageRepo,
 		storageProvider,
-		storageProcessor,
+		imageWorker,
 		cfg.S3PresignTTL,
 		logger,
 	)
@@ -121,18 +148,33 @@ func main() {
 	}
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
 
-	logger.Info("server_listening", slog.String("port", cfg.Port))
-	if err := router.Run(":" + cfg.Port); err != nil {
-		logger.Error("server_start_failed", slog.String("error", err.Error()))
-		os.Exit(1)
+	srv := &http.Server{
+		Addr:    ":" + cfg.Port,
+		Handler: router,
 	}
-}
 
-type dummyUploadProcessor struct {
-	logger *slog.Logger
-}
+	go func() {
+		logger.Info("server_listening", slog.String("port", cfg.Port))
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Error("server_start_failed", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+	}()
 
-func (d *dummyUploadProcessor) Enqueue(ctx context.Context, uploadID uuid.UUID) error {
-	d.logger.Info("dummy_enqueue_upload_triggered", slog.String("upload_id", uploadID.String()))
-	return nil
+	// Gracefull shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	logger.Info("shutting_down_application")
+
+	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelShutdown()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		logger.Error("server_shutdown_error", slog.String("error", err.Error()))
+	}
+
+	cancelWorker()
+	imageWorker.Wait()
+	logger.Info("application_stopped")
 }

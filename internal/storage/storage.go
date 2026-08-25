@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	BucketPrefixQuarantine = "quarantine/"
-	BucketPrefixFinal      = "final/"
+	bucketPrefixQuarantine = "quarantine/"
+	bucketPrefixFinal      = "final/"
 )
 
 type StorageProvider interface {
@@ -97,6 +97,41 @@ func (p UploadPurpose) ValidateFileSize(size int) error {
 	return nil
 }
 
+func BuildQuarantineKey(id uuid.UUID) string {
+	return bucketPrefixQuarantine + id.String()
+}
+
+func BuildFinalKey(id uuid.UUID) string {
+	return bucketPrefixFinal + id.String()
+}
+
+func NewUpload(userID uuid.UUID, purpose UploadPurpose, fileSize int, contentType ImageContentType) (Upload, error) {
+	if !purpose.Valid() {
+		return Upload{}, ErrInvalidPurpose
+	}
+	if err := purpose.ValidateFileSize(fileSize); err != nil {
+		return Upload{}, err
+	}
+	if !contentType.Valid() {
+		return Upload{}, ErrInvaliImageContentType
+	}
+
+	uploadID, err := uuid.NewV7()
+	if err != nil {
+		return Upload{}, err
+	}
+
+	return Upload{
+		ID:          uploadID,
+		UserID:      userID,
+		ObjectKey:   BuildQuarantineKey(uploadID),
+		Status:      UploadStatusPENDING,
+		Purpose:     purpose,
+		FileSize:    fileSize,
+		ContentType: contentType,
+	}, nil
+}
+
 // Upload is the domain representation of an upload record
 type Upload struct {
 	ID            uuid.UUID
@@ -107,6 +142,7 @@ type Upload struct {
 	FileSize      int
 	ContentType   ImageContentType
 	FailureReason *string
+	RetryCount    int
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 }

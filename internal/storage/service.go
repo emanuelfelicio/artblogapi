@@ -28,44 +28,17 @@ func NewService(repo Repository, provider StorageProvider, processor UploadProce
 }
 
 func (s *Service) InitUpload(ctx context.Context, userID uuid.UUID, purpose string, fileSize int, contentType string) (uuid.UUID, string, error) {
-	upPurpose := UploadPurpose(purpose)
-	if !upPurpose.Valid() {
-		return uuid.Nil, "", ErrInvalidPurpose
-	}
-
-	if err := upPurpose.ValidateFileSize(fileSize); err != nil {
+	upload, err := NewUpload(userID, UploadPurpose(purpose), fileSize, ImageContentType(contentType))
+	if err != nil {
 		return uuid.Nil, "", err
 	}
 
-	imgContentType := ImageContentType(contentType)
-
-	if !imgContentType.Valid() {
-		return uuid.Nil, "", ErrInvaliImageContentType
-
-	}
-
-	uploadID, err := uuid.NewV7()
-	if err != nil {
-		return uuid.Nil, "", fmt.Errorf("generate_uuid_v7: %w", err)
-	}
-
-	objectKey := BucketPrefixQuarantine + uploadID.String()
-	presignedURL, err := s.provider.GenerateUploadURL(ctx, objectKey, s.presignTTL)
+	presignedURL, err := s.provider.GenerateUploadURL(ctx, upload.ObjectKey, s.presignTTL)
 	if err != nil {
 		return uuid.Nil, "", fmt.Errorf("generate_upload_url: %w", err)
 	}
 
-	upload := Upload{
-		ID:          uploadID,
-		UserID:      userID,
-		ObjectKey:   objectKey,
-		Status:      UploadStatusPENDING,
-		Purpose:     upPurpose,
-		FileSize:    fileSize,
-		ContentType: imgContentType,
-	}
-
-	uploadID, err = s.repo.Create(ctx, upload)
+	uploadID, err := s.repo.Create(ctx, upload)
 	if err != nil {
 		return uuid.Nil, "", err
 	}
@@ -87,7 +60,7 @@ func (s *Service) CompleteUpload(ctx context.Context, userID uuid.UUID, uploadID
 		return ErrUploadNotPending
 	}
 
-	quarantineKey := BucketPrefixQuarantine + uploadID.String()
+	quarantineKey := BuildQuarantineKey(uploadID)
 	exists, err := s.provider.ObjectExists(ctx, quarantineKey)
 	if err != nil {
 		return fmt.Errorf("check_quarantine_object: %w", err)

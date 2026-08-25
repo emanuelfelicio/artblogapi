@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/emanuelfelicio/artblogapi/db/dbgen"
 	"github.com/google/uuid"
@@ -82,6 +83,78 @@ func (r *repository) SetStatusProcessing(ctx context.Context, id uuid.UUID) erro
 	})
 	if err != nil {
 		return fmt.Errorf("set_status_processing: %w", err)
+	}
+	return nil
+}
+
+func (r *repository) GetNextProcessingJob(ctx context.Context, maxRetries int, staleThreshold time.Duration) (Upload, bool, error) {
+	row, err := r.q.GetNextProcessingJob(ctx, dbgen.GetNextProcessingJobParams{
+		RetryCount: int32(maxRetries),
+		Column2:    pgtype.Interval{Microseconds: staleThreshold.Microseconds(), Valid: true},
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Upload{}, false, nil
+		}
+		return Upload{}, false, fmt.Errorf("get_next_processing_job: %w", err)
+	}
+
+	upload := Upload{
+		ID:         row.ID,
+		UserID:     row.UserID,
+		ObjectKey:  row.ObjectKey,
+		Status:     UploadStatusPROCESSING,
+		Purpose:    UploadPurpose(row.Purpose),
+		RetryCount: int(row.RetryCount),
+	}
+	if row.FileSize.Valid {
+		upload.FileSize = int(row.FileSize.Int32)
+	}
+	if row.ContentType.Valid {
+		upload.ContentType = ImageContentType(row.ContentType.String)
+	}
+
+	return upload, true, nil
+}
+
+func (r *repository) HeartbeatUploadProcessing(ctx context.Context, id uuid.UUID) error {
+	if err := r.q.HeartbeatUploadProcessing(ctx, id); err != nil {
+		return fmt.Errorf("heartbeat_upload_processing: %w", err)
+	}
+	return nil
+}
+
+func (r *repository) UpdateUploadCompletion(ctx context.Context, id uuid.UUID, objectKey string, contentType ImageContentType, status UploadStatus) error {
+	err := r.q.UpdateUploadCompletion(ctx, dbgen.UpdateUploadCompletionParams{
+		ID:          id,
+		ObjectKey:   objectKey,
+		ContentType: pgtype.Text{String: string(contentType), Valid: true},
+		Status:      dbgen.UploadStatus(status),
+	})
+	if err != nil {
+		return fmt.Errorf("update_upload_completion: %w", err)
+	}
+	return nil
+}
+
+func (r *repository) RejectUpload(ctx context.Context, id uuid.UUID, reason string) error {
+	err := r.q.RejectUpload(ctx, dbgen.RejectUploadParams{
+		ID:            id,
+		FailureReason: pgtype.Text{String: reason, Valid: true},
+	})
+	if err != nil {
+		return fmt.Errorf("reject_upload: %w", err)
+	}
+	return nil
+}
+
+func (r *repository) IncrementRetry(ctx context.Context, id uuid.UUID, backoff time.Duration) error {
+	err := r.q.IncrementUploadRetry(ctx, dbgen.IncrementUploadRetryParams{
+		ID:      id,
+		Column2: pgtype.Interval{Microseconds: backoff.Microseconds(), Valid: true},
+	})
+	if err != nil {
+		return fmt.Errorf("increment_upload_retry: %w", err)
 	}
 	return nil
 }

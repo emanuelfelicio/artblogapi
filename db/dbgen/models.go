@@ -126,6 +126,8 @@ type Upload struct {
 	UpdatedAt     pgtype.Timestamptz
 	Purpose       UploadPurpose
 	RetryCount    int32
+	NextRetryAt   pgtype.Timestamptz
+	HeartbeatAt   pgtype.Timestamptz
 }
 
 type User struct {

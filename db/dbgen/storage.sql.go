@@ -43,6 +43,56 @@ func (q *Queries) CreateUpload(ctx context.Context, arg CreateUploadParams) (uui
 	return id, err
 }
 
+const getNextProcessingJob = `-- name: GetNextProcessingJob :one
+WITH next_job AS (
+  SELECT uploads.id
+  FROM uploads
+  WHERE uploads.status = 'PROCESSING'
+    AND uploads.retry_count < $1
+    AND (uploads.next_retry_at IS NULL OR uploads.next_retry_at <= now())
+    AND (uploads.heartbeat_at IS NULL OR uploads.heartbeat_at < now() - $2::interval)
+  ORDER BY uploads.created_at ASC
+  LIMIT 1
+  FOR UPDATE SKIP LOCKED
+)
+UPDATE uploads u
+SET heartbeat_at = now(),
+    updated_at   = now()
+FROM next_job nj
+WHERE u.id = nj.id
+RETURNING u.id, u.user_id, u.purpose, u.file_size, u.content_type, u.object_key, u.retry_count
+`
+
+type GetNextProcessingJobParams struct {
+	RetryCount int32
+	Column2    pgtype.Interval
+}
+
+type GetNextProcessingJobRow struct {
+	ID          uuid.UUID
+	UserID      uuid.UUID
+	Purpose     UploadPurpose
+	FileSize    pgtype.Int4
+	ContentType pgtype.Text
+	ObjectKey   string
+	RetryCount  int32
+}
+
+func (q *Queries) GetNextProcessingJob(ctx context.Context, arg GetNextProcessingJobParams) (GetNextProcessingJobRow, error) {
+	row := q.db.QueryRow(ctx, getNextProcessingJob, arg.RetryCount, arg.Column2)
+	var i GetNextProcessingJobRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Purpose,
+		&i.FileSize,
+		&i.ContentType,
+		&i.ObjectKey,
+		&i.RetryCount,
+	)
+	return i, err
+}
+
 const getUploadByID = `-- name: GetUploadByID :one
 SELECT id, user_id, object_key, status, purpose, file_size, content_type, failure_reason, created_at, updated_at
 FROM uploads
@@ -126,6 +176,37 @@ func (q *Queries) GetUserForUpdate(ctx context.Context, id uuid.UUID) (GetUserFo
 	return i, err
 }
 
+const heartbeatUploadProcessing = `-- name: HeartbeatUploadProcessing :exec
+UPDATE uploads
+SET heartbeat_at = now(),
+    updated_at   = now()
+WHERE id = $1
+`
+
+func (q *Queries) HeartbeatUploadProcessing(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, heartbeatUploadProcessing, id)
+	return err
+}
+
+const incrementUploadRetry = `-- name: IncrementUploadRetry :exec
+UPDATE uploads
+SET retry_count   = retry_count + 1,
+    next_retry_at = now() + $2::interval,
+    heartbeat_at  = NULL,
+    updated_at    = now()
+WHERE id = $1
+`
+
+type IncrementUploadRetryParams struct {
+	ID      uuid.UUID
+	Column2 pgtype.Interval
+}
+
+func (q *Queries) IncrementUploadRetry(ctx context.Context, arg IncrementUploadRetryParams) error {
+	_, err := q.db.Exec(ctx, incrementUploadRetry, arg.ID, arg.Column2)
+	return err
+}
+
 const rejectUpload = `-- name: RejectUpload :exec
 UPDATE uploads
 SET status = 'REJECTED', failure_reason = $2, updated_at = now()
@@ -139,6 +220,33 @@ type RejectUploadParams struct {
 
 func (q *Queries) RejectUpload(ctx context.Context, arg RejectUploadParams) error {
 	_, err := q.db.Exec(ctx, rejectUpload, arg.ID, arg.FailureReason)
+	return err
+}
+
+const updateUploadCompletion = `-- name: UpdateUploadCompletion :exec
+UPDATE uploads
+SET object_key   = $2,
+    content_type = $3,
+    status       = $4,
+    heartbeat_at = NULL,
+    updated_at   = now()
+WHERE id = $1
+`
+
+type UpdateUploadCompletionParams struct {
+	ID          uuid.UUID
+	ObjectKey   string
+	ContentType pgtype.Text
+	Status      UploadStatus
+}
+
+func (q *Queries) UpdateUploadCompletion(ctx context.Context, arg UpdateUploadCompletionParams) error {
+	_, err := q.db.Exec(ctx, updateUploadCompletion,
+		arg.ID,
+		arg.ObjectKey,
+		arg.ContentType,
+		arg.Status,
+	)
 	return err
 }
 
