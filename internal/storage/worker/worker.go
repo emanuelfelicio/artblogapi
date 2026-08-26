@@ -14,6 +14,8 @@ import (
 	"github.com/google/uuid"
 )
 
+var ErrFileNotFound = errors.New("physical_file_not_found")
+
 type Config struct {
 	Concurrency       int
 	TickerInterval    time.Duration
@@ -67,6 +69,9 @@ func New(
 	if cfg.MaxRetries <= 0 {
 		cfg.MaxRetries = 3
 	}
+	if processor == nil {
+		processor = image.NewImagingProcessor()
+	}
 
 	return &Worker{
 		repo:        repo,
@@ -110,7 +115,7 @@ func (w *Worker) Start(ctx context.Context) {
 						if err != nil {
 							w.logger.Error("worker_process_job_error",
 								slog.Int("worker_id", workerID),
-								slog.String("error", err.Error()),
+								slog.Any("error", err),
 							)
 						}
 						if !found {
@@ -150,10 +155,10 @@ func (w *Worker) processNextJob(ctx context.Context) (bool, error) {
 	}
 
 	if err := w.runPipeline(ctx, job); err != nil {
-		if handleErr := w.handleJobError(ctx, job, err.Error()); handleErr != nil {
+		if handleErr := w.handleJobError(ctx, job, err); handleErr != nil {
 			w.logger.Error("handle_job_error_failed",
 				slog.String("upload_id", job.ID.String()),
-				slog.String("error", handleErr.Error()),
+				slog.Any("error", handleErr),
 			)
 		}
 		return true, err
@@ -178,7 +183,7 @@ func (w *Worker) runPipeline(ctx context.Context, job storage.Upload) error {
 				if err := w.repo.HeartbeatUploadProcessing(heartbeatCtx, job.ID); err != nil {
 					w.logger.Warn("heartbeat_failed",
 						slog.String("upload_id", job.ID.String()),
-						slog.String("error", err.Error()),
+						slog.Any("error", err),
 					)
 				}
 			}
@@ -192,13 +197,22 @@ func (w *Worker) runPipeline(ctx context.Context, job storage.Upload) error {
 	}
 
 	finalKey := storage.BuildFinalKey(job.ID)
-
-	// Idempotency check: if quarantine file is gone, check if already completed in final bucket
-	if !existsQuarantine {
-		if existsFinal, _ := w.provider.ObjectExists(ctx, finalKey); existsFinal {
-			return w.repo.UpdateUploadCompletion(ctx, job.ID, finalKey, job.ContentType, storage.UploadStatusCOMPLETED)
+	existsFinal, err := w.provider.ObjectExists(ctx, finalKey)
+	if err != nil {
+		return fmt.Errorf("check_final_exists: %w", err)
+	}
+	// Idempotency check: if the final object already exists, clean up quarantine if present, and complete the upload.
+	if existsFinal {
+		if existsQuarantine {
+			if err := w.provider.DeleteObject(ctx, quarantineKey); err != nil {
+				return fmt.Errorf("delete_quarantine_failed: %w", err)
+			}
 		}
-		return errors.New("physical_file_not_found")
+		return w.repo.UpdateUploadCompletion(ctx, job.ID, finalKey, job.ContentType, storage.UploadStatusCOMPLETED)
+	}
+
+	if !existsQuarantine {
+		return ErrFileNotFound
 	}
 
 	objReader, err := w.provider.GetObject(ctx, quarantineKey)
@@ -217,11 +231,7 @@ func (w *Worker) runPipeline(ctx context.Context, job storage.Upload) error {
 	}
 
 	if err := w.provider.DeleteObject(ctx, quarantineKey); err != nil {
-		w.logger.Warn("delete_quarantine_failed",
-			slog.String("upload_id", job.ID.String()),
-			slog.String("key", quarantineKey),
-			slog.String("error", err.Error()),
-		)
+		return fmt.Errorf("delete_quarantine_failed: %w", err)
 	}
 
 	if err := w.repo.UpdateUploadCompletion(ctx, job.ID, finalKey, processed.ContentType, storage.UploadStatusCOMPLETED); err != nil {
@@ -231,14 +241,17 @@ func (w *Worker) runPipeline(ctx context.Context, job storage.Upload) error {
 	return nil
 }
 
-func (w *Worker) handleJobError(ctx context.Context, job storage.Upload, reason string) error {
+func (w *Worker) handleJobError(ctx context.Context, job storage.Upload, err error) error {
+	if errors.Is(err, ErrFileNotFound) {
+		return w.repo.RejectUpload(ctx, job.ID, err.Error())
+	}
 	if job.RetryCount+1 >= w.cfg.MaxRetries {
 		w.logger.Warn("upload_rejected_max_retries_reached",
 			slog.String("upload_id", job.ID.String()),
 			slog.Int("retry_count", job.RetryCount+1),
-			slog.String("reason", reason),
+			slog.Any("reason", err),
 		)
-		return w.repo.RejectUpload(ctx, job.ID, reason)
+		return w.repo.RejectUpload(ctx, job.ID, err.Error())
 	}
 
 	backoff := time.Duration(job.RetryCount+1) * w.cfg.BackoffInterval
