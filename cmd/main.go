@@ -98,7 +98,7 @@ func main() {
 		awsS3.NewPresignClient(s3Client),
 		cfg.S3Bucket,
 	)
-	imageProcessor := storageImage.NewDummy()
+	imageProcessor := storageImage.NewImagingProcessor()
 	workerTriggerChan := make(chan struct{}, cfg.WorkerConcurrency)
 	workerCfg := worker.Config{
 		Concurrency:       cfg.WorkerConcurrency,
