@@ -6,7 +6,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
 	"testing"
 
 	"github.com/emanuelfelicio/artblogapi/internal/testutil/testauth"
@@ -42,11 +41,6 @@ func (s *stubStorageService) GetUploadStatus(ctx context.Context, userID uuid.UU
 		return s.getUploadStatus(ctx, userID, uploadID)
 	}
 	return Upload{}, nil
-}
-
-func TestMain(m *testing.M) {
-	gin.SetMode(gin.TestMode)
-	os.Exit(m.Run())
 }
 
 // --- HELPERS ---
