@@ -24,5 +24,5 @@ type CompleteUploadRequest struct {
 type UploadStatusResponse struct {
 	ID            uuid.UUID    `json:"id"`
 	Status        UploadStatus `json:"status"`
-	FailureReason *string      `json:"failure_reason"`
+	FailureReason *string      `json:"failure_reason,omitempty"`
 }
