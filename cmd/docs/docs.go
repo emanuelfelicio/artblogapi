@@ -211,6 +211,202 @@ const docTemplate = `{
                 }
             }
         },
+        "/uploads/complete": {
+            "post": {
+                "description": "Marks a pending upload as complete after the file has been uploaded directly to storage.",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "uploads"
+                ],
+                "summary": "Complete upload",
+                "parameters": [
+                    {
+                        "description": "Complete upload request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/CompleteUploadRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-array_github_com_emanuelfelicio_artblogapi_config_validation_FieldError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/uploads/init": {
+            "post": {
+                "description": "Initiates a new file upload and returns a pre-signed URL for direct upload.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "uploads"
+                ],
+                "summary": "Init upload",
+                "parameters": [
+                    {
+                        "description": "Init upload request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/InitUploadRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/Response-internal_storage_InitUploadResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-array_github_com_emanuelfelicio_artblogapi_config_validation_FieldError"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/uploads/{id}": {
+            "get": {
+                "description": "Returns the current status of an upload by its ID.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "uploads"
+                ],
+                "summary": "Get upload status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Upload ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/Response-internal_storage_UploadStatusResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
         "/users/me": {
             "get": {
                 "description": "Returns the full profile of the authenticated user.",
@@ -466,6 +662,17 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "CompleteUploadRequest": {
+            "type": "object",
+            "required": [
+                "upload_id"
+            ],
+            "properties": {
+                "upload_id": {
+                    "type": "string"
+                }
+            }
+        },
         "ErrorCode": {
             "type": "string",
             "enum": [
@@ -563,6 +770,37 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "InitUploadRequest": {
+            "type": "object",
+            "required": [
+                "content_type",
+                "file_size",
+                "purpose"
+            ],
+            "properties": {
+                "content_type": {
+                    "type": "string"
+                },
+                "file_size": {
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "purpose": {
+                    "type": "string"
+                }
+            }
+        },
+        "InitUploadResponse": {
+            "type": "object",
+            "properties": {
+                "upload_id": {
+                    "type": "string"
+                },
+                "upload_url": {
                     "type": "string"
                 }
             }
@@ -721,6 +959,22 @@ const docTemplate = `{
                 }
             }
         },
+        "Response-internal_storage_InitUploadResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/InitUploadResponse"
+                }
+            }
+        },
+        "Response-internal_storage_UploadStatusResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/UploadStatusResponse"
+                }
+            }
+        },
         "Response-internal_user_MyProfileResponse": {
             "type": "object",
             "properties": {
@@ -769,6 +1023,43 @@ const docTemplate = `{
                 "display_name": {
                     "type": "string",
                     "maxLength": 60
+                }
+            }
+        },
+        "UploadStatus": {
+            "type": "string",
+            "enum": [
+                "PENDING",
+                "PROCESSING",
+                "COMPLETED",
+                "REJECTED",
+                "EXPIRED",
+                "SUPERSEDED",
+                "DELETED",
+                "BOUND"
+            ],
+            "x-enum-varnames": [
+                "UploadStatusPENDING",
+                "UploadStatusPROCESSING",
+                "UploadStatusCOMPLETED",
+                "UploadStatusREJECTED",
+                "UploadStatusEXPIRED",
+                "UploadStatusSUPERSEDED",
+                "UploadStatusDELETED",
+                "UploadStatusBOUND"
+            ]
+        },
+        "UploadStatusResponse": {
+            "type": "object",
+            "properties": {
+                "failure_reason": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/UploadStatus"
                 }
             }
         },

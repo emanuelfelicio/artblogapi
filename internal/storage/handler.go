@@ -29,6 +29,20 @@ func NewHandler(s StorageService, l *slog.Logger) *handler {
 	return &handler{service: s, logger: l}
 }
 
+// InitUpload godoc
+//
+//	@Summary		Init upload
+//	@Description	Initiates a new file upload and returns a pre-signed URL for direct upload.
+//	@Tags			uploads
+//	@Security		BearerAuth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		InitUploadRequest	true	"Init upload request"
+//	@Success		201		{object}	response.Response[InitUploadResponse]
+//	@Failure		400		{object}	response.ErrorResponse[[]validation.FieldError]
+//	@Failure		401		{object}	response.ErrorResponse[any]
+//	@Failure		500		{object}	response.ErrorResponse[any]
+//	@Router			/uploads/init [post]
 func (h *handler) InitUpload(c *gin.Context) {
 	userID, err := auth.GetUserID(c)
 	if err != nil {
@@ -66,6 +80,23 @@ func (h *handler) InitUpload(c *gin.Context) {
 	})
 }
 
+// CompleteUpload godoc
+//
+//	@Summary		Complete upload
+//	@Description	Marks a pending upload as complete after the file has been uploaded directly to storage.
+//	@Tags			uploads
+//	@Security		BearerAuth
+//	@Accept			json
+//	@Param			request	body	CompleteUploadRequest	true	"Complete upload request"
+//	@Success		202		"Accepted"
+//	@Failure		400		{object}	response.ErrorResponse[[]validation.FieldError]
+//	@Failure		401		{object}	response.ErrorResponse[any]
+//	@Failure		403		{object}	response.ErrorResponse[any]
+//	@Failure		404		{object}	response.ErrorResponse[any]
+//	@Failure		409		{object}	response.ErrorResponse[any]
+//	@Failure		422		{object}	response.ErrorResponse[any]
+//	@Failure		500		{object}	response.ErrorResponse[any]
+//	@Router			/uploads/complete [post]
 func (h *handler) CompleteUpload(c *gin.Context) {
 	userID, err := auth.GetUserID(c)
 	if err != nil {
@@ -112,6 +143,21 @@ func (h *handler) CompleteUpload(c *gin.Context) {
 	response.SuccessNoContent(c, http.StatusAccepted)
 }
 
+// GetUploadStatus godoc
+//
+//	@Summary		Get upload status
+//	@Description	Returns the current status of an upload by its ID.
+//	@Tags			uploads
+//	@Security		BearerAuth
+//	@Produce		json
+//	@Param			id	path		string	true	"Upload ID"
+//	@Success		200	{object}	response.Response[UploadStatusResponse]
+//	@Failure		400	{object}	response.ErrorResponse[any]
+//	@Failure		401	{object}	response.ErrorResponse[any]
+//	@Failure		403	{object}	response.ErrorResponse[any]
+//	@Failure		404	{object}	response.ErrorResponse[any]
+//	@Failure		500	{object}	response.ErrorResponse[any]
+//	@Router			/uploads/{id} [get]
 func (h *handler) GetUploadStatus(c *gin.Context) {
 	userID, err := auth.GetUserID(c)
 	if err != nil {

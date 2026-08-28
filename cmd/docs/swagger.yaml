@@ -1,5 +1,12 @@
 basePath: /api/v1
 definitions:
+  CompleteUploadRequest:
+    properties:
+      upload_id:
+        type: string
+    required:
+    - upload_id
+    type: object
   ErrorCode:
     enum:
     - PARSE_ERROR
@@ -68,6 +75,27 @@ definitions:
       field:
         type: string
       message:
+        type: string
+    type: object
+  InitUploadRequest:
+    properties:
+      content_type:
+        type: string
+      file_size:
+        minimum: 1
+        type: integer
+      purpose:
+        type: string
+    required:
+    - content_type
+    - file_size
+    - purpose
+    type: object
+  InitUploadResponse:
+    properties:
+      upload_id:
+        type: string
+      upload_url:
         type: string
     type: object
   LoginRequest:
@@ -180,6 +208,16 @@ definitions:
       data:
         $ref: '#/definitions/RegisterResponse'
     type: object
+  Response-internal_storage_InitUploadResponse:
+    properties:
+      data:
+        $ref: '#/definitions/InitUploadResponse'
+    type: object
+  Response-internal_storage_UploadStatusResponse:
+    properties:
+      data:
+        $ref: '#/definitions/UploadStatusResponse'
+    type: object
   Response-internal_user_MyProfileResponse:
     properties:
       data:
@@ -212,6 +250,35 @@ definitions:
       display_name:
         maxLength: 60
         type: string
+    type: object
+  UploadStatus:
+    enum:
+    - PENDING
+    - PROCESSING
+    - COMPLETED
+    - REJECTED
+    - EXPIRED
+    - SUPERSEDED
+    - DELETED
+    - BOUND
+    type: string
+    x-enum-varnames:
+    - UploadStatusPENDING
+    - UploadStatusPROCESSING
+    - UploadStatusCOMPLETED
+    - UploadStatusREJECTED
+    - UploadStatusEXPIRED
+    - UploadStatusSUPERSEDED
+    - UploadStatusDELETED
+    - UploadStatusBOUND
+  UploadStatusResponse:
+    properties:
+      failure_reason:
+        type: string
+      id:
+        type: string
+      status:
+        $ref: '#/definitions/UploadStatus'
     type: object
   map_string_bool:
     additionalProperties:
@@ -352,6 +419,133 @@ paths:
       summary: Register a new user
       tags:
       - auth
+  /uploads/{id}:
+    get:
+      description: Returns the current status of an upload by its ID.
+      parameters:
+      - description: Upload ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/Response-internal_storage_UploadStatusResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+      security:
+      - BearerAuth: []
+      summary: Get upload status
+      tags:
+      - uploads
+  /uploads/complete:
+    post:
+      consumes:
+      - application/json
+      description: Marks a pending upload as complete after the file has been uploaded
+        directly to storage.
+      parameters:
+      - description: Complete upload request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/CompleteUploadRequest'
+      responses:
+        "202":
+          description: Accepted
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ErrorResponse-array_github_com_emanuelfelicio_artblogapi_config_validation_FieldError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+      security:
+      - BearerAuth: []
+      summary: Complete upload
+      tags:
+      - uploads
+  /uploads/init:
+    post:
+      consumes:
+      - application/json
+      description: Initiates a new file upload and returns a pre-signed URL for direct
+        upload.
+      parameters:
+      - description: Init upload request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/InitUploadRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/Response-internal_storage_InitUploadResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ErrorResponse-array_github_com_emanuelfelicio_artblogapi_config_validation_FieldError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+      security:
+      - BearerAuth: []
+      summary: Init upload
+      tags:
+      - uploads
   /users/{username}:
     get:
       description: Returns public profile information for a given username.
