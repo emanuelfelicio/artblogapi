@@ -27,7 +27,7 @@ func NewRepository(q *dbgen.Queries, logger *slog.Logger, pool *pgxpool.Pool) *r
 
 func (r *repository) WithTransaction(ctx context.Context, fn func(repo Repository) error) error {
 	if r.pool == nil {
-		return fn(r)
+		return errors.New("with_transaction: database connection pool is nil")
 	}
 
 	return pgx.BeginFunc(ctx, r.pool, func(tx pgx.Tx) error {
