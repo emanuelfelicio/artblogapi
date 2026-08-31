@@ -25,13 +25,13 @@ type UserService interface {
 type handler struct {
 	service       UserService
 	logger        *slog.Logger
-	cdnBase       string
+	mediaBaseURL  string
 	defaultAvatar string
 	defaultBanner string
 }
 
-func NewHandler(s UserService, l *slog.Logger, cdnBase, defaultAvatar, defaultBanner string) *handler {
-	return &handler{service: s, logger: l, cdnBase: cdnBase, defaultAvatar: defaultAvatar, defaultBanner: defaultBanner}
+func NewHandler(s UserService, l *slog.Logger, mediaBaseURL, defaultAvatar, defaultBanner string) *handler {
+	return &handler{service: s, logger: l, mediaBaseURL: mediaBaseURL, defaultAvatar: defaultAvatar, defaultBanner: defaultBanner}
 }
 
 // GetPublicProfile godoc
@@ -227,16 +227,16 @@ func (h *handler) UpdateBanner(c *gin.Context) {
 	response.SuccessNoContent(c, http.StatusNoContent)
 }
 
-// resolveURL builds the full CDN URL for a storage key. When cdnBase is empty
-// (e.g. local dev without a CDN), the raw storage key is returned as-is.
+// resolveURL builds the full public URL for a storage key. When mediaBaseURL is empty
+// the raw storage key is returned as-is.
 func (h *handler) resolveURL(key *string) string {
-	if key == nil {
+	if key == nil || *key == "" {
 		return ""
 	}
-	if h.cdnBase == "" {
+	if h.mediaBaseURL == "" {
 		return *key
 	}
-	return h.cdnBase + "/" + *key
+	return h.mediaBaseURL + "/" + *key
 }
 
 // toPublicResponse maps the domain model to the public API response.

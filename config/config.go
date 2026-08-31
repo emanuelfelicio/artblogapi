@@ -22,7 +22,7 @@ type Config struct {
 	RefreshTokenTTL         time.Duration
 	RefreshCookieDomain     string
 	RefreshCookieSecure     bool
-	CDNBaseURL              string
+	StoragePublicURL        string
 	DefaultAvatarURL        string
 	DefaultBannerURL        string
 	S3Endpoint              string
@@ -56,6 +56,11 @@ func LoadConfig() Config {
 		log.Fatalf("missing required environment variable: JWT_SECRET")
 	}
 
+	s3Endpoint := getEnvOrDefault("S3_ENDPOINT", "http://localhost:9000")
+	s3Bucket := getEnvOrDefault("S3_BUCKET", "artblog")
+	defaultPublicURL := normalizeBaseURL(s3Endpoint) + "/" + s3Bucket
+	storagePublicURL := normalizeBaseURL(getEnvOrDefault("STORAGE_PUBLIC_URL", defaultPublicURL))
+
 	return Config{
 		AppEnv:                  appEnv,
 		LogLevel:                logLevel,
@@ -67,12 +72,12 @@ func LoadConfig() Config {
 		RefreshTokenTTL:         7 * 24 * time.Hour,
 		RefreshCookieDomain:     getEnvOrDefault("REFRESH_TOKEN_COOKIE_DOMAIN", ""),
 		RefreshCookieSecure:     getEnvOrDefault("REFRESH_TOKEN_COOKIE_SECURE", "false") == "true",
-		CDNBaseURL:              normalizeBaseURL(getEnvOrDefault("CDN_BASE_URL", "http://localhost:9000")),
-		DefaultAvatarURL:        getEnvOrDefault("DEFAULT_AVATAR_URL", "https://cdn.artblog.io/defaults/avatar.png"),
-		DefaultBannerURL:        getEnvOrDefault("DEFAULT_BANNER_URL", "https://cdn.artblog.io/defaults/banner.png"),
-		S3Endpoint:              getEnvOrDefault("S3_ENDPOINT", "http://localhost:9000"),
+		StoragePublicURL:        storagePublicURL,
+		DefaultAvatarURL:        getEnvOrDefault("DEFAULT_AVATAR_URL", storagePublicURL+"/defaults/avatar.png"),
+		DefaultBannerURL:        getEnvOrDefault("DEFAULT_BANNER_URL", storagePublicURL+"/defaults/banner.png"),
+		S3Endpoint:              s3Endpoint,
 		S3Region:                getEnvOrDefault("S3_REGION", "us-east-1"),
-		S3Bucket:                getEnvOrDefault("S3_BUCKET", "artblog"),
+		S3Bucket:                s3Bucket,
 		S3AccessKey:             getEnvOrDefault("S3_ACCESS_KEY", ""),
 		S3SecretKey:             getEnvOrDefault("S3_SECRET_KEY", ""),
 		S3PresignTTL:            getEnvDurationOrDefault("S3_PRESIGN_TTL", 15*time.Minute),
