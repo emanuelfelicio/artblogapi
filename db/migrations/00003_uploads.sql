@@ -23,7 +23,6 @@ CREATE TABLE uploads (
 );
 
 CREATE INDEX idx_uploads_user ON uploads(user_id);
-CREATE INDEX idx_uploads_status ON uploads(status);
 -- +goose StatementEnd
 
 -- +goose Down
