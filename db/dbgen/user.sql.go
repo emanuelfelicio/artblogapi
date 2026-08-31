@@ -12,23 +12,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const findCompletedUploadByOwner = `-- name: FindCompletedUploadByOwner :one
-SELECT id FROM uploads
-WHERE id = $1 AND user_id = $2 AND status = 'COMPLETED'
-`
-
-type FindCompletedUploadByOwnerParams struct {
-	ID     uuid.UUID
-	UserID uuid.UUID
-}
-
-func (q *Queries) FindCompletedUploadByOwner(ctx context.Context, arg FindCompletedUploadByOwnerParams) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, findCompletedUploadByOwner, arg.ID, arg.UserID)
-	var id uuid.UUID
-	err := row.Scan(&id)
-	return id, err
-}
-
 const getMyUserProfileByID = `-- name: GetMyUserProfileByID :one
 SELECT
     u.id, u.username, u.email, u.display_name, u.bio,

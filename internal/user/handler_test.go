@@ -232,6 +232,38 @@ func TestHandler_UpdateAvatar_422_UploadNotFound(t *testing.T) {
 	}
 }
 
+func TestHandler_UpdateAvatar_422_UploadNotCompleted(t *testing.T) {
+
+	svc := &stubUserService{
+		updateAvatar: func(_ context.Context, _ uuid.UUID, _ string) error {
+			return ErrUploadNotCompleted
+		},
+	}
+	r := setupTestRouter(svc, testauth.WithPrincipal(uuid.NewString()))
+	body := map[string]string{"upload_id": uuid.NewString()}
+	w := testhttp.DoRequest(t, r, http.MethodPut, "/api/v1/users/me/avatar", body)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandler_UpdateAvatar_422_UploadInvalidPurpose(t *testing.T) {
+
+	svc := &stubUserService{
+		updateAvatar: func(_ context.Context, _ uuid.UUID, _ string) error {
+			return ErrUploadInvalidPurpose
+		},
+	}
+	r := setupTestRouter(svc, testauth.WithPrincipal(uuid.NewString()))
+	body := map[string]string{"upload_id": uuid.NewString()}
+	w := testhttp.DoRequest(t, r, http.MethodPut, "/api/v1/users/me/avatar", body)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
 func TestHandler_UpdateAvatar_400_MissingUploadID(t *testing.T) {
 
 	svc := &stubUserService{}

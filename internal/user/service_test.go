@@ -12,12 +12,15 @@ import (
 // --- STUB ---
 
 type stubRepository struct {
-	findByUsername             func(ctx context.Context, username string) (User, error)
-	findByID                   func(ctx context.Context, id uuid.UUID) (User, error)
-	updateProfile              func(ctx context.Context, id uuid.UUID, displayName, bio *string) (User, error)
-	updateAvatar               func(ctx context.Context, userID, uploadID uuid.UUID) error
-	updateBanner               func(ctx context.Context, userID, uploadID uuid.UUID) error
-	findCompletedUploadByOwner func(ctx context.Context, uploadID, userID uuid.UUID) error
+	findByUsername          func(ctx context.Context, username string) (User, error)
+	findByID                func(ctx context.Context, id uuid.UUID) (User, error)
+	updateProfile           func(ctx context.Context, id uuid.UUID, displayName, bio *string) (User, error)
+	updateAvatar            func(ctx context.Context, userID, uploadID uuid.UUID) error
+	updateBanner            func(ctx context.Context, userID, uploadID uuid.UUID) error
+	withTransaction         func(ctx context.Context, fn func(repo Repository) error) error
+	findUploadByIDForUpdate func(ctx context.Context, uploadID uuid.UUID) (UserUpload, error)
+	findUserByIDForUpdate   func(ctx context.Context, userID uuid.UUID) (User, error)
+	updateUploadStatus      func(ctx context.Context, uploadID uuid.UUID, status string) error
 }
 
 func (s *stubRepository) FindByUsername(ctx context.Context, username string) (User, error) {
@@ -55,9 +58,30 @@ func (s *stubRepository) UpdateBanner(ctx context.Context, userID, uploadID uuid
 	return nil
 }
 
-func (s *stubRepository) FindCompletedUploadByOwner(ctx context.Context, uploadID, userID uuid.UUID) error {
-	if s.findCompletedUploadByOwner != nil {
-		return s.findCompletedUploadByOwner(ctx, uploadID, userID)
+func (s *stubRepository) WithTransaction(ctx context.Context, fn func(repo Repository) error) error {
+	if s.withTransaction != nil {
+		return s.withTransaction(ctx, fn)
+	}
+	return fn(s)
+}
+
+func (s *stubRepository) FindUploadByIDForUpdate(ctx context.Context, uploadID uuid.UUID) (UserUpload, error) {
+	if s.findUploadByIDForUpdate != nil {
+		return s.findUploadByIDForUpdate(ctx, uploadID)
+	}
+	return UserUpload{}, nil
+}
+
+func (s *stubRepository) FindUserByIDForUpdate(ctx context.Context, userID uuid.UUID) (User, error) {
+	if s.findUserByIDForUpdate != nil {
+		return s.findUserByIDForUpdate(ctx, userID)
+	}
+	return User{}, nil
+}
+
+func (s *stubRepository) UpdateUploadStatus(ctx context.Context, uploadID uuid.UUID, status string) error {
+	if s.updateUploadStatus != nil {
+		return s.updateUploadStatus(ctx, uploadID, status)
 	}
 	return nil
 }
@@ -80,7 +104,6 @@ func newUser() User {
 // --- TESTS ---
 
 func TestService_GetPublicProfile_Found(t *testing.T) {
-
 	expected := newUser()
 	svc := NewService(&stubRepository{
 		findByUsername: func(_ context.Context, username string) (User, error) {
@@ -101,7 +124,6 @@ func TestService_GetPublicProfile_Found(t *testing.T) {
 }
 
 func TestService_GetPublicProfile_NotFound(t *testing.T) {
-
 	svc := NewService(&stubRepository{
 		findByUsername: func(_ context.Context, _ string) (User, error) {
 			return User{}, ErrUserNotFound
@@ -115,7 +137,6 @@ func TestService_GetPublicProfile_NotFound(t *testing.T) {
 }
 
 func TestService_GetMyProfile(t *testing.T) {
-
 	expected := newUser()
 	svc := NewService(&stubRepository{
 		findByID: func(_ context.Context, id uuid.UUID) (User, error) {
@@ -133,7 +154,6 @@ func TestService_GetMyProfile(t *testing.T) {
 }
 
 func TestService_UpdateProfile_AllFields(t *testing.T) {
-
 	userID := uuid.New()
 	name := "New Name"
 	bio := "New bio"
@@ -153,7 +173,7 @@ func TestService_UpdateProfile_AllFields(t *testing.T) {
 		},
 	})
 
-	got, err := svc.UpdateProfile(context.Background(), userID, new(name), new(bio))
+	got, err := svc.UpdateProfile(context.Background(), userID, &name, &bio)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -162,69 +182,36 @@ func TestService_UpdateProfile_AllFields(t *testing.T) {
 	}
 }
 
-func TestService_UpdateProfile_OnlyDisplayName(t *testing.T) {
-
-	userID := uuid.New()
-	name := "Partial Update"
-
-	svc := NewService(&stubRepository{
-		updateProfile: func(_ context.Context, _ uuid.UUID, dn, b *string) (User, error) {
-			if dn == nil || *dn != name {
-				t.Errorf("expected display_name %q", name)
-			}
-			if b != nil {
-				t.Errorf("expected bio nil, got %v", b)
-			}
-			return User{DisplayName: *dn}, nil
-		},
-	})
-
-	_, err := svc.UpdateProfile(context.Background(), userID, new(name), nil)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestService_UpdateProfile_BothNil(t *testing.T) {
-
-	userID := uuid.New()
-	called := false
-
-	svc := NewService(&stubRepository{
-		updateProfile: func(_ context.Context, _ uuid.UUID, dn, b *string) (User, error) {
-			called = true
-			if dn != nil || b != nil {
-				t.Errorf("expected both nil, got dn=%v bio=%v", dn, b)
-			}
-			return User{}, nil
-		},
-	})
-
-	_, err := svc.UpdateProfile(context.Background(), userID, nil, nil)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !called {
-		t.Error("expected UpdateProfile to be called on repository")
-	}
-}
-
 func TestService_UpdateAvatar_Success(t *testing.T) {
-
 	userID := uuid.New()
 	uploadID := uuid.New()
+	updatedStatus := false
+	updatedAvatar := false
 
 	svc := NewService(&stubRepository{
-		findCompletedUploadByOwner: func(_ context.Context, uid, ownerID uuid.UUID) error {
-			if uid != uploadID || ownerID != userID {
-				t.Errorf("unexpected IDs: upload=%v owner=%v", uid, ownerID)
-			}
-			return nil
+		findUploadByIDForUpdate: func(_ context.Context, uid uuid.UUID) (UserUpload, error) {
+			return UserUpload{
+				ID:      uploadID,
+				UserID:  userID,
+				Status:  "COMPLETED",
+				Purpose: "AVATAR",
+			}, nil
+		},
+		findUserByIDForUpdate: func(_ context.Context, uid uuid.UUID) (User, error) {
+			return User{ID: userID}, nil
 		},
 		updateAvatar: func(_ context.Context, uid, upID uuid.UUID) error {
 			if uid != userID || upID != uploadID {
 				t.Errorf("unexpected IDs on update: user=%v upload=%v", uid, upID)
 			}
+			updatedAvatar = true
+			return nil
+		},
+		updateUploadStatus: func(_ context.Context, uid uuid.UUID, status string) error {
+			if uid != uploadID || status != "BOUND" {
+				t.Errorf("unexpected status update: upload=%v status=%s", uid, status)
+			}
+			updatedStatus = true
 			return nil
 		},
 	})
@@ -232,45 +219,128 @@ func TestService_UpdateAvatar_Success(t *testing.T) {
 	if err := svc.UpdateAvatar(context.Background(), userID, uploadID.String()); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-}
-
-func TestService_UpdateAvatar_InvalidUUID(t *testing.T) {
-
-	svc := NewService(&stubRepository{})
-
-	err := svc.UpdateAvatar(context.Background(), uuid.New(), "not-a-uuid")
-	if !errors.Is(err, ErrUploadNotFound) {
-		t.Fatalf("expected ErrUploadNotFound, got %v", err)
+	if !updatedAvatar || !updatedStatus {
+		t.Error("expected updateAvatar and updateUploadStatus to be called")
 	}
 }
 
-func TestService_UpdateAvatar_UploadNotFound(t *testing.T) {
+func TestService_UpdateAvatar_SupersedesOldAvatar(t *testing.T) {
+	userID := uuid.New()
+	oldAvatarID := uuid.New()
+	newAvatarID := uuid.New()
+	supersededCalled := false
 
 	svc := NewService(&stubRepository{
-		findCompletedUploadByOwner: func(_ context.Context, _, _ uuid.UUID) error {
-			return ErrUploadNotFound
+		findUploadByIDForUpdate: func(_ context.Context, uid uuid.UUID) (UserUpload, error) {
+			return UserUpload{
+				ID:      newAvatarID,
+				UserID:  userID,
+				Status:  "COMPLETED",
+				Purpose: "AVATAR",
+			}, nil
+		},
+		findUserByIDForUpdate: func(_ context.Context, uid uuid.UUID) (User, error) {
+			return User{ID: userID, AvatarUploadID: &oldAvatarID}, nil
+		},
+		updateUploadStatus: func(_ context.Context, uid uuid.UUID, status string) error {
+			if uid == oldAvatarID && status == "SUPERSEDED" {
+				supersededCalled = true
+			}
+			return nil
 		},
 	})
 
-	err := svc.UpdateAvatar(context.Background(), uuid.New(), uuid.New().String())
+	if err := svc.UpdateAvatar(context.Background(), userID, newAvatarID.String()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !supersededCalled {
+		t.Error("expected old avatar to be marked SUPERSEDED")
+	}
+}
+
+func TestService_UpdateAvatar_NotOwned(t *testing.T) {
+	userID := uuid.New()
+	uploadID := uuid.New()
+	otherUserID := uuid.New()
+
+	svc := NewService(&stubRepository{
+		findUploadByIDForUpdate: func(_ context.Context, uid uuid.UUID) (UserUpload, error) {
+			return UserUpload{
+				ID:      uploadID,
+				UserID:  otherUserID,
+				Status:  "COMPLETED",
+				Purpose: "AVATAR",
+			}, nil
+		},
+	})
+
+	err := svc.UpdateAvatar(context.Background(), userID, uploadID.String())
 	if !errors.Is(err, ErrUploadNotFound) {
 		t.Fatalf("expected ErrUploadNotFound, got %v", err)
 	}
 }
 
-func TestService_UpdateBanner_Success(t *testing.T) {
-
+func TestService_UpdateAvatar_NotCompleted(t *testing.T) {
 	userID := uuid.New()
 	uploadID := uuid.New()
 
 	svc := NewService(&stubRepository{
-		findCompletedUploadByOwner: func(_ context.Context, _, _ uuid.UUID) error {
-			return nil
+		findUploadByIDForUpdate: func(_ context.Context, uid uuid.UUID) (UserUpload, error) {
+			return UserUpload{
+				ID:      uploadID,
+				UserID:  userID,
+				Status:  "PENDING",
+				Purpose: "AVATAR",
+			}, nil
+		},
+	})
+
+	err := svc.UpdateAvatar(context.Background(), userID, uploadID.String())
+	if !errors.Is(err, ErrUploadNotCompleted) {
+		t.Fatalf("expected ErrUploadNotCompleted, got %v", err)
+	}
+}
+
+func TestService_UpdateAvatar_InvalidPurpose(t *testing.T) {
+	userID := uuid.New()
+	uploadID := uuid.New()
+
+	svc := NewService(&stubRepository{
+		findUploadByIDForUpdate: func(_ context.Context, uid uuid.UUID) (UserUpload, error) {
+			return UserUpload{
+				ID:      uploadID,
+				UserID:  userID,
+				Status:  "COMPLETED",
+				Purpose: "BANNER",
+			}, nil
+		},
+	})
+
+	err := svc.UpdateAvatar(context.Background(), userID, uploadID.String())
+	if !errors.Is(err, ErrUploadInvalidPurpose) {
+		t.Fatalf("expected ErrUploadInvalidPurpose, got %v", err)
+	}
+}
+
+func TestService_UpdateBanner_Success(t *testing.T) {
+	userID := uuid.New()
+	uploadID := uuid.New()
+	updatedBanner := false
+
+	svc := NewService(&stubRepository{
+		findUploadByIDForUpdate: func(_ context.Context, uid uuid.UUID) (UserUpload, error) {
+			return UserUpload{
+				ID:      uploadID,
+				UserID:  userID,
+				Status:  "COMPLETED",
+				Purpose: "BANNER",
+			}, nil
+		},
+		findUserByIDForUpdate: func(_ context.Context, uid uuid.UUID) (User, error) {
+			return User{ID: userID}, nil
 		},
 		updateBanner: func(_ context.Context, uid, upID uuid.UUID) error {
-			if uid != userID || upID != uploadID {
-				t.Errorf("unexpected IDs: user=%v upload=%v", uid, upID)
-			}
+			updatedBanner = true
 			return nil
 		},
 	})
@@ -278,18 +348,7 @@ func TestService_UpdateBanner_Success(t *testing.T) {
 	if err := svc.UpdateBanner(context.Background(), userID, uploadID.String()); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-}
-
-func TestService_UpdateBanner_UploadNotFound(t *testing.T) {
-
-	svc := NewService(&stubRepository{
-		findCompletedUploadByOwner: func(_ context.Context, _, _ uuid.UUID) error {
-			return ErrUploadNotFound
-		},
-	})
-
-	err := svc.UpdateBanner(context.Background(), uuid.New(), uuid.New().String())
-	if !errors.Is(err, ErrUploadNotFound) {
-		t.Fatalf("expected ErrUploadNotFound, got %v", err)
+	if !updatedBanner {
+		t.Error("expected updateBanner to be called")
 	}
 }

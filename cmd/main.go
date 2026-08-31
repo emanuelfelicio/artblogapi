@@ -63,7 +63,7 @@ func main() {
 
 	// dependencies
 	authRepo := auth.NewRepository(queries, logger, pool)
-	userRepo := user.NewRepository(queries)
+	userRepo := user.NewRepository(queries, pool)
 
 	authTokenProvider, err := token.NewTokenProvider([]byte(cfg.JWTSecret), cfg.JWTIssuer, cfg.AccessTokenTTL, cfg.RefreshTokenTTL)
 	if err != nil {
@@ -74,7 +74,7 @@ func main() {
 	refreshCookieCfg := auth.NewRefreshCookieConfig(cfg.RefreshCookieDomain, cfg.RefreshCookieSecure)
 	authHandler := auth.NewHandler(authService, logger, refreshCookieCfg)
 	userService := user.NewService(userRepo)
-	userHandler := user.NewHandler(userService, logger, cfg.CDNBaseURL, cfg.DefaultAvatarURL, cfg.DefaultBannerURL)
+	userHandler := user.NewHandler(userService, logger, cfg.StoragePublicURL, cfg.DefaultAvatarURL, cfg.DefaultBannerURL)
 
 	// S3 Client Bootstrap
 	s3Client, err := storageS3.InitS3Client(

@@ -3,6 +3,7 @@ package user
 import (
 	"context"
 
+	"github.com/emanuelfelicio/artblogapi/internal/storage"
 	"github.com/google/uuid"
 )
 
@@ -12,7 +13,11 @@ type Repository interface {
 	UpdateProfile(ctx context.Context, id uuid.UUID, displayName, bio *string) (User, error)
 	UpdateAvatar(ctx context.Context, userID, uploadID uuid.UUID) error
 	UpdateBanner(ctx context.Context, userID, uploadID uuid.UUID) error
-	FindCompletedUploadByOwner(ctx context.Context, uploadID, userID uuid.UUID) error
+
+	WithTransaction(ctx context.Context, fn func(repo Repository) error) error
+	FindUploadByIDForUpdate(ctx context.Context, uploadID uuid.UUID) (UserUpload, error)
+	FindUserByIDForUpdate(ctx context.Context, userID uuid.UUID) (User, error)
+	UpdateUploadStatus(ctx context.Context, uploadID uuid.UUID, status string) error
 }
 
 type service struct {
@@ -42,11 +47,11 @@ func (s *service) UpdateAvatar(ctx context.Context, userID uuid.UUID, uploadIDSt
 		return ErrUploadNotFound
 	}
 
-	if err := s.repo.FindCompletedUploadByOwner(ctx, uploadID, userID); err != nil {
-		return err
-	}
-
-	return s.repo.UpdateAvatar(ctx, userID, uploadID)
+	return s.bindMedia(ctx, userID, uploadID, string(storage.PurposeAVATAR), func(txRepo Repository) error {
+		return txRepo.UpdateAvatar(ctx, userID, uploadID)
+	}, func(u User) *uuid.UUID {
+		return u.AvatarUploadID
+	})
 }
 
 func (s *service) UpdateBanner(ctx context.Context, userID uuid.UUID, uploadIDStr string) error {
@@ -56,9 +61,60 @@ func (s *service) UpdateBanner(ctx context.Context, userID uuid.UUID, uploadIDSt
 		return ErrUploadNotFound
 	}
 
-	if err := s.repo.FindCompletedUploadByOwner(ctx, uploadID, userID); err != nil {
-		return err
-	}
+	return s.bindMedia(ctx, userID, uploadID, string(storage.PurposeBANNER), func(txRepo Repository) error {
+		return txRepo.UpdateBanner(ctx, userID, uploadID)
+	}, func(u User) *uuid.UUID {
+		return u.BannerUploadID
+	})
+}
 
-	return s.repo.UpdateBanner(ctx, userID, uploadID)
+func (s *service) bindMedia(
+	ctx context.Context,
+	userID, uploadID uuid.UUID,
+	expectedPurpose string,
+	updateFK func(txRepo Repository) error,
+	getOldUploadID func(u User) *uuid.UUID,
+) error {
+	return s.repo.WithTransaction(ctx, func(txRepo Repository) error {
+		upload, err := txRepo.FindUploadByIDForUpdate(ctx, uploadID)
+		if err != nil {
+			return err
+		}
+
+		if upload.UserID != userID {
+			return ErrUploadNotFound
+		}
+
+		if upload.Status != string(storage.UploadStatusCOMPLETED) && upload.Status != string(storage.UploadStatusBOUND) {
+			return ErrUploadNotCompleted
+		}
+
+		if upload.Purpose != expectedPurpose {
+			return ErrUploadInvalidPurpose
+		}
+
+		userEntity, err := txRepo.FindUserByIDForUpdate(ctx, userID)
+		if err != nil {
+			return err
+		}
+
+		oldUploadID := getOldUploadID(userEntity)
+		if oldUploadID != nil && *oldUploadID != uploadID {
+			if err := txRepo.UpdateUploadStatus(ctx, *oldUploadID, string(storage.UploadStatusSUPERSEDED)); err != nil {
+				return err
+			}
+		}
+
+		if err := updateFK(txRepo); err != nil {
+			return err
+		}
+
+		if upload.Status != string(storage.UploadStatusBOUND) {
+			if err := txRepo.UpdateUploadStatus(ctx, uploadID, string(storage.UploadStatusBOUND)); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
 }

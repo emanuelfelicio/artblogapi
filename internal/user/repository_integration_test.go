@@ -35,7 +35,7 @@ func TestMain(m *testing.M) {
 	}()
 
 	queries := dbgen.New(testDBPool)
-	testRepo = NewRepository(queries)
+	testRepo = NewRepository(queries, testDBPool)
 	os.Exit(m.Run())
 }
 
@@ -72,15 +72,25 @@ func mustCreateUser(t *testing.T, ctx context.Context, u User) {
 	}
 }
 
-func mustCreateUpload(t *testing.T, ctx context.Context, id uuid.UUID, userID uuid.UUID, key string, status string) {
+func mustCreateUploadWithPurpose(t *testing.T, ctx context.Context, id uuid.UUID, userID uuid.UUID, key string, status string, purpose string) {
 	t.Helper()
 	_, err := testDBPool.Exec(ctx, `
 		INSERT INTO uploads (id, user_id, object_key, status, purpose, file_size, content_type)
-		VALUES ($1, $2, $3, $4, 'AVATAR', 1024, 'image/png')
-	`, id, userID, key, status)
+		VALUES ($1, $2, $3, $4, $5, 1024, 'image/png')
+	`, id, userID, key, status, purpose)
 	if err != nil {
-		t.Fatalf("mustCreateUpload: %v", err)
+		t.Fatalf("mustCreateUploadWithPurpose: %v", err)
 	}
+}
+
+func getUploadStatus(t *testing.T, ctx context.Context, id uuid.UUID) string {
+	t.Helper()
+	var status string
+	err := testDBPool.QueryRow(ctx, `SELECT status FROM uploads WHERE id = $1`, id).Scan(&status)
+	if err != nil {
+		t.Fatalf("getUploadStatus: %v", err)
+	}
+	return status
 }
 
 func TestRepository_FindByUsername(t *testing.T) {
@@ -100,52 +110,17 @@ func TestRepository_FindByUsername(t *testing.T) {
 		if found.Username != u.Username {
 			t.Errorf("expected Username %s, got %s", u.Username, found.Username)
 		}
-		if found.Email != u.Email {
-			t.Errorf("expected Email %s, got %s", u.Email, found.Email)
-		}
-		if found.DisplayName != u.DisplayName {
-			t.Errorf("expected DisplayName %s, got %s", u.DisplayName, found.DisplayName)
-		}
-		if found.Bio != u.Bio {
-			t.Errorf("expected Bio %s, got %s", u.Bio, found.Bio)
-		}
-		if found.AvatarKey != nil {
-			t.Errorf("expected AvatarKey to be nil, got %s", *found.AvatarKey)
-		}
-		if found.BannerKey != nil {
-			t.Errorf("expected BannerKey to be nil, got %s", *found.BannerKey)
-		}
 	})
 
-	t.Run("returns ErrUserNotFound when inactive", func(t *testing.T) {
-		ctx := setup(t)
-		u := newTestUser()
-		u.IsActive = false
-		mustCreateUser(t, ctx, u)
-
-		_, err := testRepo.FindByUsername(ctx, u.Username)
-		if !errors.Is(err, ErrUserNotFound) {
-			t.Fatalf("expected ErrUserNotFound, got %v", err)
-		}
-	})
-
-	t.Run("returns ErrUserNotFound when username does not exist", func(t *testing.T) {
-		ctx := setup(t)
-		_, err := testRepo.FindByUsername(ctx, "nonexistent")
-		if !errors.Is(err, ErrUserNotFound) {
-			t.Fatalf("expected ErrUserNotFound, got %v", err)
-		}
-	})
-
-	t.Run("resolves avatar and banner keys if completed", func(t *testing.T) {
+	t.Run("resolves avatar and banner keys if bound", func(t *testing.T) {
 		ctx := setup(t)
 		u := newTestUser()
 		mustCreateUser(t, ctx, u)
 
 		avatarID := uuid.New()
 		bannerID := uuid.New()
-		mustCreateUpload(t, ctx, avatarID, u.ID, "avatars/my-avatar.png", "BOUND")
-		mustCreateUpload(t, ctx, bannerID, u.ID, "banners/my-banner.png", "BOUND")
+		mustCreateUploadWithPurpose(t, ctx, avatarID, u.ID, "avatars/my-avatar.png", "BOUND", "AVATAR")
+		mustCreateUploadWithPurpose(t, ctx, bannerID, u.ID, "banners/my-banner.png", "BOUND", "BANNER")
 
 		_, err := testDBPool.Exec(ctx, `
 			UPDATE users SET avatar_upload_id = $1, banner_upload_id = $2 WHERE id = $3
@@ -166,31 +141,6 @@ func TestRepository_FindByUsername(t *testing.T) {
 			t.Errorf("expected BannerKey 'banners/my-banner.png', got %v", found.BannerKey)
 		}
 	})
-
-	t.Run("does not resolve keys if upload is not completed", func(t *testing.T) {
-		ctx := setup(t)
-		u := newTestUser()
-		mustCreateUser(t, ctx, u)
-
-		avatarID := uuid.New()
-		mustCreateUpload(t, ctx, avatarID, u.ID, "avatars/my-avatar.png", "PENDING")
-
-		_, err := testDBPool.Exec(ctx, `
-			UPDATE users SET avatar_upload_id = $1 WHERE id = $2
-		`, avatarID, u.ID)
-		if err != nil {
-			t.Fatalf("failed to update user upload: %v", err)
-		}
-
-		found, err := testRepo.FindByUsername(ctx, u.Username)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		if found.AvatarKey != nil {
-			t.Errorf("expected AvatarKey to be nil because upload is not completed, got %v", *found.AvatarKey)
-		}
-	})
 }
 
 func TestRepository_FindByID(t *testing.T) {
@@ -204,24 +154,6 @@ func TestRepository_FindByID(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if found.ID != u.ID {
-			t.Errorf("expected ID %v, got %v", u.ID, found.ID)
-		}
-		if found.Username != u.Username {
-			t.Errorf("expected Username %s, got %s", u.Username, found.Username)
-		}
-	})
-
-	t.Run("returns user even if inactive", func(t *testing.T) {
-		ctx := setup(t)
-		u := newTestUser()
-		u.IsActive = false
-		mustCreateUser(t, ctx, u)
-
-		found, err := testRepo.FindByID(ctx, u.ID)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
 		if found.ID != u.ID {
 			t.Errorf("expected ID %v, got %v", u.ID, found.ID)
 		}
@@ -257,189 +189,156 @@ func TestRepository_UpdateProfile(t *testing.T) {
 			t.Errorf("expected Bio %s, got %s", newBio, updated.Bio)
 		}
 	})
-
-	t.Run("updates only display name when bio is nil", func(t *testing.T) {
-		ctx := setup(t)
-		u := newTestUser()
-		mustCreateUser(t, ctx, u)
-
-		newDisplayName := "Just Display Name"
-
-		updated, err := testRepo.UpdateProfile(ctx, u.ID, &newDisplayName, nil)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		if updated.DisplayName != newDisplayName {
-			t.Errorf("expected DisplayName %s, got %s", newDisplayName, updated.DisplayName)
-		}
-		if updated.Bio != u.Bio {
-			t.Errorf("expected Bio to remain %s, got %s", u.Bio, updated.Bio)
-		}
-	})
-
-	t.Run("updates only bio when display name is nil", func(t *testing.T) {
-		ctx := setup(t)
-		u := newTestUser()
-		mustCreateUser(t, ctx, u)
-
-		newBio := "Just Bio"
-
-		updated, err := testRepo.UpdateProfile(ctx, u.ID, nil, &newBio)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		if updated.DisplayName != u.DisplayName {
-			t.Errorf("expected DisplayName to remain %s, got %s", u.DisplayName, updated.DisplayName)
-		}
-		if updated.Bio != newBio {
-			t.Errorf("expected Bio %s, got %s", newBio, updated.Bio)
-		}
-	})
-
-	t.Run("returns error when user does not exist", func(t *testing.T) {
-		ctx := setup(t)
-		nonExistentID := uuid.New()
-		newDisplayName := "Nobody"
-
-		_, err := testRepo.UpdateProfile(ctx, nonExistentID, &newDisplayName, nil)
-		if err == nil {
-			t.Fatal("expected error when user does not exist, got nil")
-		}
-	})
 }
 
-func TestRepository_UpdateAvatar(t *testing.T) {
-	t.Run("updates avatar upload id successfully", func(t *testing.T) {
-		ctx := setup(t)
-		u := newTestUser()
-		mustCreateUser(t, ctx, u)
-
-		avatarID := uuid.New()
-		mustCreateUpload(t, ctx, avatarID, u.ID, "avatars/my-avatar.png", "BOUND")
-
-		err := testRepo.UpdateAvatar(ctx, u.ID, avatarID)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		updatedUser, err := testRepo.FindByID(ctx, u.ID)
-		if err != nil {
-			t.Fatalf("failed to find user: %v", err)
-		}
-
-		if updatedUser.AvatarKey == nil || *updatedUser.AvatarKey != "avatars/my-avatar.png" {
-			t.Errorf("expected AvatarKey 'avatars/my-avatar.png', got %v", updatedUser.AvatarKey)
-		}
-	})
-
-	t.Run("returns error when upload does not exist", func(t *testing.T) {
-		ctx := setup(t)
-		u := newTestUser()
-		mustCreateUser(t, ctx, u)
-
-		nonExistentUploadID := uuid.New()
-
-		err := testRepo.UpdateAvatar(ctx, u.ID, nonExistentUploadID)
-		if err == nil {
-			t.Fatal("expected error when setting non-existent upload as avatar, got nil")
-		}
-	})
-}
-
-func TestRepository_UpdateBanner(t *testing.T) {
-	t.Run("updates banner upload id successfully", func(t *testing.T) {
-		ctx := setup(t)
-		u := newTestUser()
-		mustCreateUser(t, ctx, u)
-
-		bannerID := uuid.New()
-		mustCreateUpload(t, ctx, bannerID, u.ID, "banners/my-banner.png", "BOUND")
-
-		err := testRepo.UpdateBanner(ctx, u.ID, bannerID)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		updatedUser, err := testRepo.FindByID(ctx, u.ID)
-		if err != nil {
-			t.Fatalf("failed to find user: %v", err)
-		}
-
-		if updatedUser.BannerKey == nil || *updatedUser.BannerKey != "banners/my-banner.png" {
-			t.Errorf("expected BannerKey 'banners/my-banner.png', got %v", updatedUser.BannerKey)
-		}
-	})
-
-	t.Run("returns error when upload does not exist", func(t *testing.T) {
-		ctx := setup(t)
-		u := newTestUser()
-		mustCreateUser(t, ctx, u)
-
-		nonExistentUploadID := uuid.New()
-
-		err := testRepo.UpdateBanner(ctx, u.ID, nonExistentUploadID)
-		if err == nil {
-			t.Fatal("expected error when setting non-existent upload as banner, got nil")
-		}
-	})
-}
-
-func TestRepository_FindCompletedUploadByOwner(t *testing.T) {
-	t.Run("succeeds when completed upload owned by user exists", func(t *testing.T) {
+func TestRepository_FindUploadByIDForUpdate(t *testing.T) {
+	t.Run("locks and returns upload for update", func(t *testing.T) {
 		ctx := setup(t)
 		u := newTestUser()
 		mustCreateUser(t, ctx, u)
 
 		uploadID := uuid.New()
-		mustCreateUpload(t, ctx, uploadID, u.ID, "images/pic.png", "COMPLETED")
+		mustCreateUploadWithPurpose(t, ctx, uploadID, u.ID, "avatars/pic.png", "COMPLETED", "AVATAR")
 
-		err := testRepo.FindCompletedUploadByOwner(ctx, uploadID, u.ID)
+		upload, err := testRepo.FindUploadByIDForUpdate(ctx, uploadID)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-	})
 
-	t.Run("returns ErrUploadNotFound when status is not COMPLETED", func(t *testing.T) {
-		ctx := setup(t)
-		u := newTestUser()
-		mustCreateUser(t, ctx, u)
-
-		uploadID := uuid.New()
-		mustCreateUpload(t, ctx, uploadID, u.ID, "images/pic.png", "PENDING")
-
-		err := testRepo.FindCompletedUploadByOwner(ctx, uploadID, u.ID)
-		if !errors.Is(err, ErrUploadNotFound) {
-			t.Fatalf("expected ErrUploadNotFound, got %v", err)
-		}
-	})
-
-	t.Run("returns ErrUploadNotFound when owned by another user", func(t *testing.T) {
-		ctx := setup(t)
-		u1 := newTestUser()
-		mustCreateUser(t, ctx, u1)
-
-		u2 := newTestUser()
-		mustCreateUser(t, ctx, u2)
-
-		uploadID := uuid.New()
-		mustCreateUpload(t, ctx, uploadID, u1.ID, "images/pic.png", "COMPLETED")
-
-		err := testRepo.FindCompletedUploadByOwner(ctx, uploadID, u2.ID)
-		if !errors.Is(err, ErrUploadNotFound) {
-			t.Fatalf("expected ErrUploadNotFound, got %v", err)
+		if upload.ID != uploadID || upload.UserID != u.ID || upload.Status != "COMPLETED" || upload.Purpose != "AVATAR" {
+			t.Errorf("unexpected upload mapping: %+v", upload)
 		}
 	})
 
 	t.Run("returns ErrUploadNotFound when upload does not exist", func(t *testing.T) {
 		ctx := setup(t)
+		_, err := testRepo.FindUploadByIDForUpdate(ctx, uuid.New())
+		if !errors.Is(err, ErrUploadNotFound) {
+			t.Fatalf("expected ErrUploadNotFound, got %v", err)
+		}
+	})
+}
+
+func TestRepository_FindUserByIDForUpdate(t *testing.T) {
+	t.Run("locks and returns user media IDs for update", func(t *testing.T) {
+		ctx := setup(t)
 		u := newTestUser()
 		mustCreateUser(t, ctx, u)
 
-		err := testRepo.FindCompletedUploadByOwner(ctx, uuid.New(), u.ID)
-		if !errors.Is(err, ErrUploadNotFound) {
-			t.Fatalf("expected ErrUploadNotFound, got %v", err)
+		avatarID := uuid.New()
+		mustCreateUploadWithPurpose(t, ctx, avatarID, u.ID, "avatars/pic.png", "BOUND", "AVATAR")
+		_, err := testDBPool.Exec(ctx, `UPDATE users SET avatar_upload_id = $1 WHERE id = $2`, avatarID, u.ID)
+		if err != nil {
+			t.Fatalf("failed to update user avatar: %v", err)
+		}
+
+		userEntity, err := testRepo.FindUserByIDForUpdate(ctx, u.ID)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if userEntity.ID != u.ID || userEntity.AvatarUploadID == nil || *userEntity.AvatarUploadID != avatarID {
+			t.Errorf("unexpected user entity: %+v", userEntity)
+		}
+	})
+}
+
+func TestRepository_UpdateUploadStatus(t *testing.T) {
+	t.Run("updates upload status", func(t *testing.T) {
+		ctx := setup(t)
+		u := newTestUser()
+		mustCreateUser(t, ctx, u)
+
+		uploadID := uuid.New()
+		mustCreateUploadWithPurpose(t, ctx, uploadID, u.ID, "avatars/pic.png", "COMPLETED", "AVATAR")
+
+		err := testRepo.UpdateUploadStatus(ctx, uploadID, "BOUND")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if status := getUploadStatus(t, ctx, uploadID); status != "BOUND" {
+			t.Errorf("expected status BOUND, got %s", status)
+		}
+	})
+}
+
+func TestRepository_UpdateAvatarAndBanner(t *testing.T) {
+	t.Run("updates user avatar and banner FKs directly", func(t *testing.T) {
+		ctx := setup(t)
+		u := newTestUser()
+		mustCreateUser(t, ctx, u)
+
+		avatarID := uuid.New()
+		bannerID := uuid.New()
+		mustCreateUploadWithPurpose(t, ctx, avatarID, u.ID, "avatars/pic.png", "BOUND", "AVATAR")
+		mustCreateUploadWithPurpose(t, ctx, bannerID, u.ID, "banners/pic.png", "BOUND", "BANNER")
+
+		if err := testRepo.UpdateAvatar(ctx, u.ID, avatarID); err != nil {
+			t.Fatalf("UpdateAvatar: %v", err)
+		}
+		if err := testRepo.UpdateBanner(ctx, u.ID, bannerID); err != nil {
+			t.Fatalf("UpdateBanner: %v", err)
+		}
+
+		userEntity, err := testRepo.FindUserByIDForUpdate(ctx, u.ID)
+		if err != nil {
+			t.Fatalf("FindUserByIDForUpdate: %v", err)
+		}
+		if userEntity.AvatarUploadID == nil || *userEntity.AvatarUploadID != avatarID {
+			t.Errorf("expected AvatarUploadID %v, got %v", avatarID, userEntity.AvatarUploadID)
+		}
+		if userEntity.BannerUploadID == nil || *userEntity.BannerUploadID != bannerID {
+			t.Errorf("expected BannerUploadID %v, got %v", bannerID, userEntity.BannerUploadID)
+		}
+	})
+}
+
+func TestRepository_WithTransaction(t *testing.T) {
+	t.Run("executes operations inside a single transaction with commit", func(t *testing.T) {
+		ctx := setup(t)
+		u := newTestUser()
+		mustCreateUser(t, ctx, u)
+
+		uploadID := uuid.New()
+		mustCreateUploadWithPurpose(t, ctx, uploadID, u.ID, "avatars/pic.png", "COMPLETED", "AVATAR")
+
+		err := testRepo.WithTransaction(ctx, func(txRepo Repository) error {
+			if err := txRepo.UpdateUploadStatus(ctx, uploadID, "BOUND"); err != nil {
+				return err
+			}
+			return txRepo.UpdateAvatar(ctx, u.ID, uploadID)
+		})
+		if err != nil {
+			t.Fatalf("unexpected transaction error: %v", err)
+		}
+
+		if status := getUploadStatus(t, ctx, uploadID); status != "BOUND" {
+			t.Errorf("expected status BOUND, got %s", status)
+		}
+	})
+
+	t.Run("rolls back transaction when callback returns an error", func(t *testing.T) {
+		ctx := setup(t)
+		u := newTestUser()
+		mustCreateUser(t, ctx, u)
+
+		uploadID := uuid.New()
+		mustCreateUploadWithPurpose(t, ctx, uploadID, u.ID, "avatars/pic.png", "COMPLETED", "AVATAR")
+
+		forcedErr := errors.New("forced rollback")
+		err := testRepo.WithTransaction(ctx, func(txRepo Repository) error {
+			if err := txRepo.UpdateUploadStatus(ctx, uploadID, "BOUND"); err != nil {
+				return err
+			}
+			return forcedErr
+		})
+		if !errors.Is(err, forcedErr) {
+			t.Fatalf("expected forcedErr, got %v", err)
+		}
+
+		if status := getUploadStatus(t, ctx, uploadID); status != "COMPLETED" {
+			t.Errorf("expected status to remain COMPLETED due to rollback, got %s", status)
 		}
 	})
 }

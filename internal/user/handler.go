@@ -170,8 +170,8 @@ func (h *handler) UpdateAvatar(c *gin.Context) {
 	}
 
 	if err := h.service.UpdateAvatar(c.Request.Context(), userID, req.UploadID); err != nil {
-		if errors.Is(err, ErrUploadNotFound) {
-			response.Fail(c, http.StatusUnprocessableEntity, response.InvalidCode, "upload not found or not completed")
+		if errors.Is(err, ErrUploadNotFound) || errors.Is(err, ErrUploadNotCompleted) || errors.Is(err, ErrUploadInvalidPurpose) {
+			response.Fail(c, http.StatusUnprocessableEntity, response.InvalidCode, "upload not found or invalid")
 			return
 		}
 		h.logger.Error("update_avatar_failed", slog.Any("err", err))
@@ -215,8 +215,8 @@ func (h *handler) UpdateBanner(c *gin.Context) {
 	}
 
 	if err := h.service.UpdateBanner(c.Request.Context(), userID, req.UploadID); err != nil {
-		if errors.Is(err, ErrUploadNotFound) {
-			response.Fail(c, http.StatusUnprocessableEntity, response.InvalidCode, "upload not found or not completed")
+		if errors.Is(err, ErrUploadNotFound) || errors.Is(err, ErrUploadNotCompleted) || errors.Is(err, ErrUploadInvalidPurpose) {
+			response.Fail(c, http.StatusUnprocessableEntity, response.InvalidCode, "upload not found or invalid")
 			return
 		}
 		h.logger.Error("update_banner_failed", slog.Any("err", err))
