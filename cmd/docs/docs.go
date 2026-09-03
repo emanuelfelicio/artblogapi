@@ -774,6 +774,19 @@ const docTemplate = `{
                 }
             }
         },
+        "ImageContentType": {
+            "type": "string",
+            "enum": [
+                "image/jpeg",
+                "image/png",
+                "image/webp"
+            ],
+            "x-enum-varnames": [
+                "ContentTypeJPEG",
+                "ContentTypePNG",
+                "ContentTypeWebP"
+            ]
+        },
         "InitUploadRequest": {
             "type": "object",
             "required": [
@@ -783,14 +796,14 @@ const docTemplate = `{
             ],
             "properties": {
                 "content_type": {
-                    "type": "string"
+                    "$ref": "#/definitions/ImageContentType"
                 },
                 "file_size": {
                     "type": "integer",
                     "minimum": 1
                 },
                 "purpose": {
-                    "type": "string"
+                    "$ref": "#/definitions/UploadPurpose"
                 }
             }
         },
@@ -1025,6 +1038,19 @@ const docTemplate = `{
                     "maxLength": 60
                 }
             }
+        },
+        "UploadPurpose": {
+            "type": "string",
+            "enum": [
+                "AVATAR",
+                "BANNER",
+                "POST_IMAGE"
+            ],
+            "x-enum-varnames": [
+                "PurposeAVATAR",
+                "PurposeBANNER",
+                "PurposePOSTIMAGE"
+            ]
         },
         "UploadStatus": {
             "type": "string",

@@ -27,7 +27,7 @@ func NewService(repo Repository, provider StorageProvider, processor UploadProce
 	return &Service{repo: repo, provider: provider, processor: processor, presignTTL: presignTTL, logger: logger}
 }
 
-func (s *Service) InitUpload(ctx context.Context, userID uuid.UUID, purpose string, fileSize int, contentType string) (uuid.UUID, string, error) {
+func (s *Service) InitUpload(ctx context.Context, userID uuid.UUID, purpose UploadPurpose, fileSize int, contentType ImageContentType) (uuid.UUID, string, error) {
 	upload, err := NewUpload(userID, UploadPurpose(purpose), fileSize, ImageContentType(contentType))
 	if err != nil {
 		return uuid.Nil, "", err

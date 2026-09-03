@@ -15,7 +15,7 @@ import (
 )
 
 type StorageService interface {
-	InitUpload(ctx context.Context, userID uuid.UUID, purpose string, fileSize int, contentType string) (uuid.UUID, string, error)
+	InitUpload(ctx context.Context, userID uuid.UUID, purpose UploadPurpose, fileSize int, contentType ImageContentType) (uuid.UUID, string, error)
 	CompleteUpload(ctx context.Context, userID uuid.UUID, uploadID uuid.UUID) error
 	GetUploadStatus(ctx context.Context, userID uuid.UUID, uploadID uuid.UUID) (Upload, error)
 }
@@ -62,7 +62,7 @@ func (h *handler) InitUpload(c *gin.Context) {
 		return
 	}
 
-	uploadID, uploadURL, err := h.service.InitUpload(c.Request.Context(), userID, req.Purpose, int(req.FileSize), req.ContentType)
+	uploadID, uploadURL, err := h.service.InitUpload(c.Request.Context(), userID, req.Purpose, req.FileSize, req.ContentType)
 	if err != nil {
 		if errors.Is(err, ErrFileSizeExceeded) || errors.Is(err, ErrInvalidFileSize) || errors.Is(err, ErrInvaliImageContentType) || errors.Is(err, ErrInvalidPurpose) {
 			response.Fail(c, http.StatusBadRequest, response.ValidationCode, err.Error())

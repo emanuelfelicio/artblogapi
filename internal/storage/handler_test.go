@@ -17,12 +17,12 @@ import (
 // --- STUBS ---
 
 type stubStorageService struct {
-	initUpload      func(ctx context.Context, userID uuid.UUID, purpose string, fileSize int, contentType string) (uuid.UUID, string, error)
+	initUpload      func(ctx context.Context, userID uuid.UUID, purpose UploadPurpose, fileSize int, contentType ImageContentType) (uuid.UUID, string, error)
 	completeUpload  func(ctx context.Context, userID uuid.UUID, uploadID uuid.UUID) error
 	getUploadStatus func(ctx context.Context, userID uuid.UUID, uploadID uuid.UUID) (Upload, error)
 }
 
-func (s *stubStorageService) InitUpload(ctx context.Context, userID uuid.UUID, purpose string, fileSize int, contentType string) (uuid.UUID, string, error) {
+func (s *stubStorageService) InitUpload(ctx context.Context, userID uuid.UUID, purpose UploadPurpose, fileSize int, contentType ImageContentType) (uuid.UUID, string, error) {
 	if s.initUpload != nil {
 		return s.initUpload(ctx, userID, purpose, fileSize, contentType)
 	}
@@ -99,7 +99,7 @@ func TestHandler_InitUpload(t *testing.T) {
 			name: "400 service returns ErrInvalidPurpose",
 			body: validBody,
 			svc: &stubStorageService{
-				initUpload: func(_ context.Context, _ uuid.UUID, _ string, _ int, _ string) (uuid.UUID, string, error) {
+				initUpload: func(_ context.Context, _ uuid.UUID, _ UploadPurpose, _ int, _ ImageContentType) (uuid.UUID, string, error) {
 					return uuid.Nil, "", ErrInvalidPurpose
 				},
 			},
@@ -109,7 +109,7 @@ func TestHandler_InitUpload(t *testing.T) {
 			name: "400 service returns ErrFileSizeExceeded",
 			body: validBody,
 			svc: &stubStorageService{
-				initUpload: func(_ context.Context, _ uuid.UUID, _ string, _ int, _ string) (uuid.UUID, string, error) {
+				initUpload: func(_ context.Context, _ uuid.UUID, _ UploadPurpose, _ int, _ ImageContentType) (uuid.UUID, string, error) {
 					return uuid.Nil, "", ErrFileSizeExceeded
 				},
 			},
@@ -119,7 +119,7 @@ func TestHandler_InitUpload(t *testing.T) {
 			name: "400 service returns ErrInvalidFileSize",
 			body: validBody,
 			svc: &stubStorageService{
-				initUpload: func(_ context.Context, _ uuid.UUID, _ string, _ int, _ string) (uuid.UUID, string, error) {
+				initUpload: func(_ context.Context, _ uuid.UUID, _ UploadPurpose, _ int, _ ImageContentType) (uuid.UUID, string, error) {
 					return uuid.Nil, "", ErrInvalidFileSize
 				},
 			},
@@ -129,7 +129,7 @@ func TestHandler_InitUpload(t *testing.T) {
 			name: "400 service returns ErrInvaliImageContentType",
 			body: validBody,
 			svc: &stubStorageService{
-				initUpload: func(_ context.Context, _ uuid.UUID, _ string, _ int, _ string) (uuid.UUID, string, error) {
+				initUpload: func(_ context.Context, _ uuid.UUID, _ UploadPurpose, _ int, _ ImageContentType) (uuid.UUID, string, error) {
 					return uuid.Nil, "", ErrInvaliImageContentType
 				},
 			},
@@ -139,7 +139,7 @@ func TestHandler_InitUpload(t *testing.T) {
 			name: "500 unexpected service error",
 			body: validBody,
 			svc: &stubStorageService{
-				initUpload: func(_ context.Context, _ uuid.UUID, _ string, _ int, _ string) (uuid.UUID, string, error) {
+				initUpload: func(_ context.Context, _ uuid.UUID, _ UploadPurpose, _ int, _ ImageContentType) (uuid.UUID, string, error) {
 					return uuid.Nil, "", fmt.Errorf("db timeout")
 				},
 			},

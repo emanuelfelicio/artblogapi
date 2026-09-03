@@ -103,9 +103,9 @@ func TestService_InitUpload(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		purpose     string
+		purpose     UploadPurpose
 		fileSize    int
-		contentType string
+		contentType ImageContentType
 		repo        *stubRepository
 		provider    *stubStorageProvider
 		wantErr     error

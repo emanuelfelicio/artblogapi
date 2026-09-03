@@ -77,15 +77,25 @@ definitions:
       message:
         type: string
     type: object
+  ImageContentType:
+    enum:
+    - image/jpeg
+    - image/png
+    - image/webp
+    type: string
+    x-enum-varnames:
+    - ContentTypeJPEG
+    - ContentTypePNG
+    - ContentTypeWebP
   InitUploadRequest:
     properties:
       content_type:
-        type: string
+        $ref: '#/definitions/ImageContentType'
       file_size:
         minimum: 1
         type: integer
       purpose:
-        type: string
+        $ref: '#/definitions/UploadPurpose'
     required:
     - content_type
     - file_size
@@ -251,6 +261,16 @@ definitions:
         maxLength: 60
         type: string
     type: object
+  UploadPurpose:
+    enum:
+    - AVATAR
+    - BANNER
+    - POST_IMAGE
+    type: string
+    x-enum-varnames:
+    - PurposeAVATAR
+    - PurposeBANNER
+    - PurposePOSTIMAGE
   UploadStatus:
     enum:
     - PENDING
