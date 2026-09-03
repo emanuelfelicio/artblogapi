@@ -14,7 +14,7 @@ const (
 )
 
 type StorageProvider interface {
-	GenerateUploadURL(ctx context.Context, key string, expires time.Duration) (string, error)
+	GenerateUploadURL(ctx context.Context, key string, contentType ImageContentType, expires time.Duration) (string, error)
 	GetObject(ctx context.Context, key string) (io.ReadCloser, error)
 	PutObject(ctx context.Context, key string, reader io.Reader, contentType string) error
 	DeleteObject(ctx context.Context, key string) error

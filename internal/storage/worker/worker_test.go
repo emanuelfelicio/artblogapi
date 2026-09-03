@@ -63,16 +63,16 @@ func (s *stubRepository) IncrementRetry(ctx context.Context, id uuid.UUID, backo
 }
 
 type stubStorageProvider struct {
-	generateUploadURL func(ctx context.Context, key string, expires time.Duration) (string, error)
+	generateUploadURL func(ctx context.Context, key string, contentType storage.ImageContentType, expires time.Duration) (string, error)
 	getObject         func(ctx context.Context, key string) (io.ReadCloser, error)
 	putObject         func(ctx context.Context, key string, reader io.Reader, contentType string) error
 	deleteObject      func(ctx context.Context, key string) error
 	objectExists      func(ctx context.Context, key string) (bool, error)
 }
 
-func (s *stubStorageProvider) GenerateUploadURL(ctx context.Context, key string, expires time.Duration) (string, error) {
+func (s *stubStorageProvider) GenerateUploadURL(ctx context.Context, key string, contentType storage.ImageContentType, expires time.Duration) (string, error) {
 	if s.generateUploadURL != nil {
-		return s.generateUploadURL(ctx, key, expires)
+		return s.generateUploadURL(ctx, key, contentType, expires)
 	}
 	return "", nil
 }
