@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/emanuelfelicio/artblogapi/db"
 	"github.com/emanuelfelicio/artblogapi/db/dbgen"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -20,6 +21,13 @@ type repository struct {
 
 func NewRepository(q *dbgen.Queries, pool *pgxpool.Pool) *repository {
 	return &repository{q: q, pool: pool}
+}
+
+func (r *repository) query(ctx context.Context) *dbgen.Queries {
+	if tx, ok := db.TxFromContext(ctx); ok {
+		return r.q.WithTx(tx)
+	}
+	return r.q
 }
 
 func (r *repository) Create(ctx context.Context, u Upload) (uuid.UUID, error) {
@@ -155,6 +163,33 @@ func (r *repository) IncrementRetry(ctx context.Context, id uuid.UUID, backoff t
 	})
 	if err != nil {
 		return fmt.Errorf("increment_upload_retry: %w", err)
+	}
+	return nil
+}
+
+func (r *repository) FindUploadByIDForUpdate(ctx context.Context, id uuid.UUID) (Upload, error) {
+	row, err := r.query(ctx).GetUploadForUpdate(ctx, id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Upload{}, ErrUploadNotFound
+		}
+		return Upload{}, fmt.Errorf("find_upload_by_id_for_update: %w", err)
+	}
+	return Upload{
+		ID:        row.ID,
+		UserID:    row.UserID,
+		Status:    UploadStatus(row.Status),
+		Purpose:   UploadPurpose(row.Purpose),
+		ObjectKey: row.ObjectKey,
+	}, nil
+}
+
+func (r *repository) UpdateUploadStatus(ctx context.Context, id uuid.UUID, status UploadStatus) error {
+	if err := r.query(ctx).UpdateUploadStatus(ctx, dbgen.UpdateUploadStatusParams{
+		ID:     id,
+		Status: dbgen.UploadStatus(status),
+	}); err != nil {
+		return fmt.Errorf("update_upload_status: %w", err)
 	}
 	return nil
 }

@@ -10,5 +10,7 @@ var (
 	ErrUploadNotFound         = errors.New("upload not found")
 	ErrUploadNotPending       = errors.New("upload is not in PENDING status")
 	ErrUploadNotOwned         = errors.New("upload does not belong to this user")
+	ErrUploadNotCompleted     = errors.New("upload is not completed")
+	ErrUploadInvalidPurpose   = errors.New("upload purpose is invalid for this resource")
 	ErrFileNotFound           = errors.New("file not found")
 )

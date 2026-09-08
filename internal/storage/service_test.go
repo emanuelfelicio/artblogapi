@@ -14,9 +14,11 @@ import (
 // --- STUBS ---
 
 type stubRepository struct {
-	create              func(ctx context.Context, u Upload) (uuid.UUID, error)
-	getByID             func(ctx context.Context, id uuid.UUID) (Upload, error)
-	setStatusProcessing func(ctx context.Context, id uuid.UUID) error
+	create                  func(ctx context.Context, u Upload) (uuid.UUID, error)
+	getByID                 func(ctx context.Context, id uuid.UUID) (Upload, error)
+	setStatusProcessing     func(ctx context.Context, id uuid.UUID) error
+	findUploadByIDForUpdate func(ctx context.Context, id uuid.UUID) (Upload, error)
+	updateUploadStatus      func(ctx context.Context, id uuid.UUID, status UploadStatus) error
 }
 
 func (s *stubRepository) Create(ctx context.Context, u Upload) (uuid.UUID, error) {
@@ -36,6 +38,20 @@ func (s *stubRepository) GetByID(ctx context.Context, id uuid.UUID) (Upload, err
 func (s *stubRepository) SetStatusProcessing(ctx context.Context, id uuid.UUID) error {
 	if s.setStatusProcessing != nil {
 		return s.setStatusProcessing(ctx, id)
+	}
+	return nil
+}
+
+func (s *stubRepository) FindUploadByIDForUpdate(ctx context.Context, id uuid.UUID) (Upload, error) {
+	if s.findUploadByIDForUpdate != nil {
+		return s.findUploadByIDForUpdate(ctx, id)
+	}
+	return Upload{}, nil
+}
+
+func (s *stubRepository) UpdateUploadStatus(ctx context.Context, id uuid.UUID, status UploadStatus) error {
+	if s.updateUploadStatus != nil {
+		return s.updateUploadStatus(ctx, id, status)
 	}
 	return nil
 }
@@ -710,5 +726,133 @@ func TestService_GetUploadStatus(t *testing.T) {
 				t.Fatalf("unexpected result: %+v", res)
 			}
 		})
+	}
+}
+
+func TestService_Bind(t *testing.T) {
+	ctx := context.Background()
+	ownerID := uuid.New()
+	otherUserID := uuid.New()
+	uploadID := uuid.New()
+
+	tests := []struct {
+		name    string
+		repo    Repository
+		userID  uuid.UUID
+		purpose UploadPurpose
+		wantErr error
+	}{
+		{
+			name: "success when completed and owned",
+			repo: &stubRepository{
+				findUploadByIDForUpdate: func(_ context.Context, _ uuid.UUID) (Upload, error) {
+					return Upload{
+						ID:      uploadID,
+						UserID:  ownerID,
+						Status:  UploadStatusCOMPLETED,
+						Purpose: PurposeAVATAR,
+					}, nil
+				},
+				updateUploadStatus: func(_ context.Context, _ uuid.UUID, status UploadStatus) error {
+					if status != UploadStatusBOUND {
+						t.Fatalf("expected BOUND status, got %v", status)
+					}
+					return nil
+				},
+			},
+			userID:  ownerID,
+			purpose: PurposeAVATAR,
+			wantErr: nil,
+		},
+		{
+			name: "fails when not owned by user",
+			repo: &stubRepository{
+				findUploadByIDForUpdate: func(_ context.Context, _ uuid.UUID) (Upload, error) {
+					return Upload{
+						ID:      uploadID,
+						UserID:  ownerID,
+						Status:  UploadStatusCOMPLETED,
+						Purpose: PurposeAVATAR,
+					}, nil
+				},
+			},
+			userID:  otherUserID,
+			purpose: PurposeAVATAR,
+			wantErr: ErrUploadNotFound,
+		},
+		{
+			name: "fails when not completed",
+			repo: &stubRepository{
+				findUploadByIDForUpdate: func(_ context.Context, _ uuid.UUID) (Upload, error) {
+					return Upload{
+						ID:      uploadID,
+						UserID:  ownerID,
+						Status:  UploadStatusPENDING,
+						Purpose: PurposeAVATAR,
+					}, nil
+				},
+			},
+			userID:  ownerID,
+			purpose: PurposeAVATAR,
+			wantErr: ErrUploadNotCompleted,
+		},
+		{
+			name: "fails when purpose does not match",
+			repo: &stubRepository{
+				findUploadByIDForUpdate: func(_ context.Context, _ uuid.UUID) (Upload, error) {
+					return Upload{
+						ID:      uploadID,
+						UserID:  ownerID,
+						Status:  UploadStatusCOMPLETED,
+						Purpose: PurposeBANNER,
+					}, nil
+				},
+			},
+			userID:  ownerID,
+			purpose: PurposeAVATAR,
+			wantErr: ErrUploadInvalidPurpose,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := newTestService(tc.repo, &stubStorageProvider{})
+			err := svc.Bind(ctx, uploadID, tc.userID, tc.purpose)
+
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("expected error %v, got %v", tc.wantErr, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestService_Supersede(t *testing.T) {
+	ctx := context.Background()
+	uploadID := uuid.New()
+	var updatedStatus UploadStatus
+
+	repo := &stubRepository{
+		updateUploadStatus: func(_ context.Context, id uuid.UUID, status UploadStatus) error {
+			if id != uploadID {
+				t.Fatalf("expected uploadID %v, got %v", uploadID, id)
+			}
+			updatedStatus = status
+			return nil
+		},
+	}
+
+	svc := newTestService(repo, &stubStorageProvider{})
+	if err := svc.Supersede(ctx, uploadID); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if updatedStatus != UploadStatusSUPERSEDED {
+		t.Fatalf("expected SUPERSEDED, got %v", updatedStatus)
 	}
 }

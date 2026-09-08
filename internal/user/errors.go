@@ -1,10 +1,14 @@
 package user
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/emanuelfelicio/artblogapi/internal/storage"
+)
 
 var (
 	ErrUserNotFound         = errors.New("user not found")
-	ErrUploadNotFound       = errors.New("upload not found or not owned by user")
-	ErrUploadNotCompleted   = errors.New("upload is not completed")
-	ErrUploadInvalidPurpose = errors.New("upload purpose is invalid for this resource")
+	ErrUploadNotFound       = storage.ErrUploadNotFound
+	ErrUploadNotCompleted   = storage.ErrUploadNotCompleted
+	ErrUploadInvalidPurpose = storage.ErrUploadInvalidPurpose
 )

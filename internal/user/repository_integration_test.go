@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/emanuelfelicio/artblogapi/db/dbgen"
+	"github.com/emanuelfelicio/artblogapi/internal/storage"
 	"github.com/emanuelfelicio/artblogapi/internal/testutil"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -15,8 +16,9 @@ import (
 )
 
 var (
-	testDBPool *pgxpool.Pool
-	testRepo   Repository
+	testDBPool      *pgxpool.Pool
+	testRepo        Repository
+	testStorageRepo storage.Repository
 )
 
 type nopLogger struct{}
@@ -36,6 +38,7 @@ func TestMain(m *testing.M) {
 
 	queries := dbgen.New(testDBPool)
 	testRepo = NewRepository(queries, testDBPool)
+	testStorageRepo = storage.NewRepository(queries, testDBPool)
 	os.Exit(m.Run())
 }
 
@@ -191,34 +194,6 @@ func TestRepository_UpdateProfile(t *testing.T) {
 	})
 }
 
-func TestRepository_FindUploadByIDForUpdate(t *testing.T) {
-	t.Run("locks and returns upload for update", func(t *testing.T) {
-		ctx := setup(t)
-		u := newTestUser()
-		mustCreateUser(t, ctx, u)
-
-		uploadID := uuid.New()
-		mustCreateUploadWithPurpose(t, ctx, uploadID, u.ID, "avatars/pic.png", "COMPLETED", "AVATAR")
-
-		upload, err := testRepo.FindUploadByIDForUpdate(ctx, uploadID)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		if upload.ID != uploadID || upload.UserID != u.ID || upload.Status != "COMPLETED" || upload.Purpose != "AVATAR" {
-			t.Errorf("unexpected upload mapping: %+v", upload)
-		}
-	})
-
-	t.Run("returns ErrUploadNotFound when upload does not exist", func(t *testing.T) {
-		ctx := setup(t)
-		_, err := testRepo.FindUploadByIDForUpdate(ctx, uuid.New())
-		if !errors.Is(err, ErrUploadNotFound) {
-			t.Fatalf("expected ErrUploadNotFound, got %v", err)
-		}
-	})
-}
-
 func TestRepository_FindUserByIDForUpdate(t *testing.T) {
 	t.Run("locks and returns user media IDs for update", func(t *testing.T) {
 		ctx := setup(t)
@@ -239,26 +214,6 @@ func TestRepository_FindUserByIDForUpdate(t *testing.T) {
 
 		if userEntity.ID != u.ID || userEntity.AvatarUploadID == nil || *userEntity.AvatarUploadID != avatarID {
 			t.Errorf("unexpected user entity: %+v", userEntity)
-		}
-	})
-}
-
-func TestRepository_UpdateUploadStatus(t *testing.T) {
-	t.Run("updates upload status", func(t *testing.T) {
-		ctx := setup(t)
-		u := newTestUser()
-		mustCreateUser(t, ctx, u)
-
-		uploadID := uuid.New()
-		mustCreateUploadWithPurpose(t, ctx, uploadID, u.ID, "avatars/pic.png", "COMPLETED", "AVATAR")
-
-		err := testRepo.UpdateUploadStatus(ctx, uploadID, "BOUND")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		if status := getUploadStatus(t, ctx, uploadID); status != "BOUND" {
-			t.Errorf("expected status BOUND, got %s", status)
 		}
 	})
 }
@@ -303,11 +258,11 @@ func TestRepository_WithTransaction(t *testing.T) {
 		uploadID := uuid.New()
 		mustCreateUploadWithPurpose(t, ctx, uploadID, u.ID, "avatars/pic.png", "COMPLETED", "AVATAR")
 
-		err := testRepo.WithTransaction(ctx, func(txRepo Repository) error {
-			if err := txRepo.UpdateUploadStatus(ctx, uploadID, "BOUND"); err != nil {
+		err := testRepo.WithTransaction(ctx, func(txCtx context.Context) error {
+			if err := testStorageRepo.UpdateUploadStatus(txCtx, uploadID, storage.UploadStatusBOUND); err != nil {
 				return err
 			}
-			return txRepo.UpdateAvatar(ctx, u.ID, uploadID)
+			return testRepo.UpdateAvatar(txCtx, u.ID, uploadID)
 		})
 		if err != nil {
 			t.Fatalf("unexpected transaction error: %v", err)
@@ -327,8 +282,8 @@ func TestRepository_WithTransaction(t *testing.T) {
 		mustCreateUploadWithPurpose(t, ctx, uploadID, u.ID, "avatars/pic.png", "COMPLETED", "AVATAR")
 
 		forcedErr := errors.New("forced rollback")
-		err := testRepo.WithTransaction(ctx, func(txRepo Repository) error {
-			if err := txRepo.UpdateUploadStatus(ctx, uploadID, "BOUND"); err != nil {
+		err := testRepo.WithTransaction(ctx, func(txCtx context.Context) error {
+			if err := testStorageRepo.UpdateUploadStatus(txCtx, uploadID, storage.UploadStatusBOUND); err != nil {
 				return err
 			}
 			return forcedErr

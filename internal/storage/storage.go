@@ -146,3 +146,16 @@ type Upload struct {
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 }
+
+func (u Upload) CanBind(userID uuid.UUID, expectedPurpose UploadPurpose) error {
+	if u.UserID != userID {
+		return ErrUploadNotFound
+	}
+	if u.Status != UploadStatusCOMPLETED {
+		return ErrUploadNotCompleted
+	}
+	if u.Purpose != expectedPurpose {
+		return ErrUploadInvalidPurpose
+	}
+	return nil
+}

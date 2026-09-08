@@ -313,3 +313,57 @@ func TestRepository_IncrementRetry(t *testing.T) {
 		}
 	})
 }
+
+func TestRepository_FindUploadByIDForUpdate(t *testing.T) {
+	t.Run("fetches upload for update", func(t *testing.T) {
+		ctx := setup(t)
+		userID := mustCreateUser(t, ctx)
+		u := newTestUpload(t, userID)
+
+		_, err := testRepo.Create(ctx, u)
+		if err != nil {
+			t.Fatalf("Create: %v", err)
+		}
+
+		upload, err := testRepo.FindUploadByIDForUpdate(ctx, u.ID)
+		if err != nil {
+			t.Fatalf("FindUploadByIDForUpdate: %v", err)
+		}
+		if upload.ID != u.ID || upload.UserID != userID || upload.Status != UploadStatusPENDING || upload.Purpose != PurposeAVATAR {
+			t.Errorf("unexpected upload: %+v", upload)
+		}
+	})
+
+	t.Run("returns ErrUploadNotFound when missing", func(t *testing.T) {
+		ctx := setup(t)
+		_, err := testRepo.FindUploadByIDForUpdate(ctx, uuid.New())
+		if !errors.Is(err, ErrUploadNotFound) {
+			t.Fatalf("expected ErrUploadNotFound, got %v", err)
+		}
+	})
+}
+
+func TestRepository_UpdateUploadStatus(t *testing.T) {
+	t.Run("updates upload status", func(t *testing.T) {
+		ctx := setup(t)
+		userID := mustCreateUser(t, ctx)
+		u := newTestUpload(t, userID)
+
+		_, err := testRepo.Create(ctx, u)
+		if err != nil {
+			t.Fatalf("Create: %v", err)
+		}
+
+		if err := testRepo.UpdateUploadStatus(ctx, u.ID, UploadStatusBOUND); err != nil {
+			t.Fatalf("UpdateUploadStatus: %v", err)
+		}
+
+		fetched, err := testRepo.GetByID(ctx, u.ID)
+		if err != nil {
+			t.Fatalf("GetByID: %v", err)
+		}
+		if fetched.Status != UploadStatusBOUND {
+			t.Errorf("expected BOUND, got %v", fetched.Status)
+		}
+	})
+}

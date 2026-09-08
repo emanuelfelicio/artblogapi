@@ -73,9 +73,6 @@ func main() {
 	authService := auth.NewService(authRepo, logger, authTokenProvider)
 	refreshCookieCfg := auth.NewRefreshCookieConfig(cfg.RefreshCookieDomain, cfg.RefreshCookieSecure)
 	authHandler := auth.NewHandler(authService, logger, refreshCookieCfg)
-	userService := user.NewService(userRepo)
-	userHandler := user.NewHandler(userService, logger, cfg.StoragePublicURL, cfg.DefaultAvatarURL, cfg.DefaultBannerURL)
-
 	// S3 Client Bootstrap
 	s3Client, err := storageS3.InitS3Client(
 		ctx,
@@ -128,6 +125,9 @@ func main() {
 		logger,
 	)
 	storageHandler := storage.NewHandler(storageService, logger)
+
+	userService := user.NewService(userRepo, storageService)
+	userHandler := user.NewHandler(userService, logger, cfg.StoragePublicURL, cfg.DefaultAvatarURL, cfg.DefaultBannerURL)
 
 	if cfg.AppEnv == "production" {
 		gin.SetMode(gin.ReleaseMode)

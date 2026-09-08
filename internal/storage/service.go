@@ -13,6 +13,8 @@ type Repository interface {
 	Create(ctx context.Context, u Upload) (uuid.UUID, error)
 	GetByID(ctx context.Context, id uuid.UUID) (Upload, error)
 	SetStatusProcessing(ctx context.Context, id uuid.UUID) error
+	FindUploadByIDForUpdate(ctx context.Context, id uuid.UUID) (Upload, error)
+	UpdateUploadStatus(ctx context.Context, id uuid.UUID, status UploadStatus) error
 }
 
 type Service struct {
@@ -91,4 +93,21 @@ func (s *Service) GetUploadStatus(ctx context.Context, userID uuid.UUID, uploadI
 	}
 
 	return upload, nil
+}
+
+func (s *Service) Bind(ctx context.Context, uploadID, userID uuid.UUID, purpose UploadPurpose) error {
+	upload, err := s.repo.FindUploadByIDForUpdate(ctx, uploadID)
+	if err != nil {
+		return err
+	}
+
+	if err := upload.CanBind(userID, purpose); err != nil {
+		return err
+	}
+
+	return s.repo.UpdateUploadStatus(ctx, uploadID, UploadStatusBOUND)
+}
+
+func (s *Service) Supersede(ctx context.Context, uploadID uuid.UUID) error {
+	return s.repo.UpdateUploadStatus(ctx, uploadID, UploadStatusSUPERSEDED)
 }

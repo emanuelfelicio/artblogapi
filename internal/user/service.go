@@ -7,6 +7,11 @@ import (
 	"github.com/google/uuid"
 )
 
+type MediaBinder interface {
+	Bind(ctx context.Context, uploadID, userID uuid.UUID, purpose storage.UploadPurpose) error
+	Supersede(ctx context.Context, uploadID uuid.UUID) error
+}
+
 type Repository interface {
 	FindByUsername(ctx context.Context, username string) (User, error)
 	FindByID(ctx context.Context, id uuid.UUID) (User, error)
@@ -14,18 +19,17 @@ type Repository interface {
 	UpdateAvatar(ctx context.Context, userID, uploadID uuid.UUID) error
 	UpdateBanner(ctx context.Context, userID, uploadID uuid.UUID) error
 
-	WithTransaction(ctx context.Context, fn func(repo Repository) error) error
-	FindUploadByIDForUpdate(ctx context.Context, uploadID uuid.UUID) (UserUpload, error)
+	WithTransaction(ctx context.Context, fn func(txCtx context.Context) error) error
 	FindUserByIDForUpdate(ctx context.Context, userID uuid.UUID) (User, error)
-	UpdateUploadStatus(ctx context.Context, uploadID uuid.UUID, status string) error
 }
 
 type service struct {
-	repo Repository
+	repo  Repository
+	media MediaBinder
 }
 
-func NewService(repo Repository) *service {
-	return &service{repo: repo}
+func NewService(repo Repository, media MediaBinder) *service {
+	return &service{repo: repo, media: media}
 }
 
 func (s *service) GetPublicProfile(ctx context.Context, username string) (User, error) {
@@ -43,12 +47,11 @@ func (s *service) UpdateProfile(ctx context.Context, userID uuid.UUID, displayNa
 func (s *service) UpdateAvatar(ctx context.Context, userID uuid.UUID, uploadIDStr string) error {
 	uploadID, err := uuid.Parse(uploadIDStr)
 	if err != nil {
-		// returns not found even for invalid UUID to avoid leaking rejection reason (resource enumeration)
 		return ErrUploadNotFound
 	}
 
-	return s.bindMedia(ctx, userID, uploadID, string(storage.PurposeAVATAR), func(txRepo Repository) error {
-		return txRepo.UpdateAvatar(ctx, userID, uploadID)
+	return s.bindMedia(ctx, userID, uploadID, storage.PurposeAVATAR, func(txCtx context.Context) error {
+		return s.repo.UpdateAvatar(txCtx, userID, uploadID)
 	}, func(u User) *uuid.UUID {
 		return u.AvatarUploadID
 	})
@@ -57,12 +60,11 @@ func (s *service) UpdateAvatar(ctx context.Context, userID uuid.UUID, uploadIDSt
 func (s *service) UpdateBanner(ctx context.Context, userID uuid.UUID, uploadIDStr string) error {
 	uploadID, err := uuid.Parse(uploadIDStr)
 	if err != nil {
-		// returns not found even for invalid UUID to avoid leaking rejection reason (resource enumeration)
 		return ErrUploadNotFound
 	}
 
-	return s.bindMedia(ctx, userID, uploadID, string(storage.PurposeBANNER), func(txRepo Repository) error {
-		return txRepo.UpdateBanner(ctx, userID, uploadID)
+	return s.bindMedia(ctx, userID, uploadID, storage.PurposeBANNER, func(txCtx context.Context) error {
+		return s.repo.UpdateBanner(txCtx, userID, uploadID)
 	}, func(u User) *uuid.UUID {
 		return u.BannerUploadID
 	})
@@ -71,50 +73,31 @@ func (s *service) UpdateBanner(ctx context.Context, userID uuid.UUID, uploadIDSt
 func (s *service) bindMedia(
 	ctx context.Context,
 	userID, uploadID uuid.UUID,
-	expectedPurpose string,
-	updateFK func(txRepo Repository) error,
+	expectedPurpose storage.UploadPurpose,
+	updateFK func(txCtx context.Context) error,
 	getOldUploadID func(u User) *uuid.UUID,
 ) error {
-	return s.repo.WithTransaction(ctx, func(txRepo Repository) error {
-		upload, err := txRepo.FindUploadByIDForUpdate(ctx, uploadID)
-		if err != nil {
-			return err
-		}
-
-		if upload.UserID != userID {
-			return ErrUploadNotFound
-		}
-
-		if upload.Status != string(storage.UploadStatusCOMPLETED) && upload.Status != string(storage.UploadStatusBOUND) {
-			return ErrUploadNotCompleted
-		}
-
-		if upload.Purpose != expectedPurpose {
-			return ErrUploadInvalidPurpose
-		}
-
-		userEntity, err := txRepo.FindUserByIDForUpdate(ctx, userID)
+	return s.repo.WithTransaction(ctx, func(txCtx context.Context) error {
+		userEntity, err := s.repo.FindUserByIDForUpdate(txCtx, userID)
 		if err != nil {
 			return err
 		}
 
 		oldUploadID := getOldUploadID(userEntity)
-		if oldUploadID != nil && *oldUploadID != uploadID {
-			if err := txRepo.UpdateUploadStatus(ctx, *oldUploadID, string(storage.UploadStatusSUPERSEDED)); err != nil {
-				return err
-			}
+		if oldUploadID != nil && *oldUploadID == uploadID {
+			return nil
 		}
 
-		if err := updateFK(txRepo); err != nil {
+		if err := s.media.Bind(txCtx, uploadID, userID, expectedPurpose); err != nil {
 			return err
 		}
 
-		if upload.Status != string(storage.UploadStatusBOUND) {
-			if err := txRepo.UpdateUploadStatus(ctx, uploadID, string(storage.UploadStatusBOUND)); err != nil {
+		if oldUploadID != nil {
+			if err := s.media.Supersede(txCtx, *oldUploadID); err != nil {
 				return err
 			}
 		}
 
-		return nil
+		return updateFK(txCtx)
 	})
 }

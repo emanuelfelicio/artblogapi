@@ -20,11 +20,3 @@ type User struct {
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }
-
-type UserUpload struct {
-	ID        uuid.UUID
-	UserID    uuid.UUID
-	Status    string
-	Purpose   string
-	ObjectKey string
-}
