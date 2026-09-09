@@ -560,6 +560,35 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ]
+            },
+            "delete": {
+                "description": "Removes the avatar of the authenticated user.",
+                "tags": [
+                    "users"
+                ],
+                "summary": "Delete avatar",
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
             }
         },
         "/users/me/banner": {
@@ -601,6 +630,35 @@ const docTemplate = `{
                     },
                     "422": {
                         "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "description": "Removes the banner of the authenticated user.",
+                "tags": [
+                    "users"
+                ],
+                "summary": "Delete banner",
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/ErrorResponse-any"
                         }

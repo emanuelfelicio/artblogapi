@@ -36,7 +36,9 @@ type stubRepository struct {
 	findByID              func(ctx context.Context, id uuid.UUID) (User, error)
 	updateProfile         func(ctx context.Context, id uuid.UUID, displayName, bio *string) (User, error)
 	updateAvatar          func(ctx context.Context, userID, uploadID uuid.UUID) error
+	deleteAvatar          func(ctx context.Context, userID uuid.UUID) error
 	updateBanner          func(ctx context.Context, userID, uploadID uuid.UUID) error
+	deleteBanner          func(ctx context.Context, userID uuid.UUID) error
 	withTransaction       func(ctx context.Context, fn func(txCtx context.Context) error) error
 	findUserByIDForUpdate func(ctx context.Context, userID uuid.UUID) (User, error)
 }
@@ -69,9 +71,23 @@ func (s *stubRepository) UpdateAvatar(ctx context.Context, userID, uploadID uuid
 	return nil
 }
 
+func (s *stubRepository) DeleteAvatar(ctx context.Context, userID uuid.UUID) error {
+	if s.deleteAvatar != nil {
+		return s.deleteAvatar(ctx, userID)
+	}
+	return nil
+}
+
 func (s *stubRepository) UpdateBanner(ctx context.Context, userID, uploadID uuid.UUID) error {
 	if s.updateBanner != nil {
 		return s.updateBanner(ctx, userID, uploadID)
+	}
+	return nil
+}
+
+func (s *stubRepository) DeleteBanner(ctx context.Context, userID uuid.UUID) error {
+	if s.deleteBanner != nil {
+		return s.deleteBanner(ctx, userID)
 	}
 	return nil
 }
@@ -270,12 +286,32 @@ func (f *fakeUserRepository) UpdateAvatar(_ context.Context, userID, uploadID uu
 	return nil
 }
 
+func (f *fakeUserRepository) DeleteAvatar(_ context.Context, userID uuid.UUID) error {
+	u, ok := f.users[userID]
+	if !ok {
+		return ErrUserNotFound
+	}
+	u.AvatarUploadID = nil
+	f.users[userID] = u
+	return nil
+}
+
 func (f *fakeUserRepository) UpdateBanner(_ context.Context, userID, uploadID uuid.UUID) error {
 	u, ok := f.users[userID]
 	if !ok {
 		return ErrUserNotFound
 	}
 	u.BannerUploadID = &uploadID
+	f.users[userID] = u
+	return nil
+}
+
+func (f *fakeUserRepository) DeleteBanner(_ context.Context, userID uuid.UUID) error {
+	u, ok := f.users[userID]
+	if !ok {
+		return ErrUserNotFound
+	}
+	u.BannerUploadID = nil
 	f.users[userID] = u
 	return nil
 }
@@ -504,5 +540,143 @@ func TestService_UpdateBanner_InvalidUUID(t *testing.T) {
 	err := svc.UpdateBanner(context.Background(), userID, "invalid-uuid")
 	if !errors.Is(err, ErrUploadNotFound) {
 		t.Fatalf("expected ErrUploadNotFound, got %v", err)
+	}
+}
+
+func TestService_DeleteAvatar_Success(t *testing.T) {
+	userID := uuid.New()
+	avatarID := uuid.New()
+
+	repo := newFakeUserRepository(User{ID: userID, AvatarUploadID: &avatarID})
+	media := newFakeMediaBinder()
+	svc := NewService(repo, media)
+
+	if err := svc.DeleteAvatar(context.Background(), userID); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	updatedUser, _ := repo.FindByID(context.Background(), userID)
+	if updatedUser.AvatarUploadID != nil {
+		t.Errorf("expected avatar to be nil, got %v", updatedUser.AvatarUploadID)
+	}
+	if !media.supersededUploads[avatarID] {
+		t.Errorf("expected avatar %v to be marked superseded", avatarID)
+	}
+}
+
+func TestService_DeleteAvatar_Idempotent(t *testing.T) {
+	userID := uuid.New()
+
+	repo := newFakeUserRepository(User{ID: userID, AvatarUploadID: nil})
+	media := newFakeMediaBinder()
+	svc := NewService(repo, media)
+
+	if err := svc.DeleteAvatar(context.Background(), userID); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(media.supersededUploads) > 0 {
+		t.Errorf("expected no superseded calls on nil avatar, got %v", media.supersededUploads)
+	}
+}
+
+func TestService_DeleteAvatar_UserNotFound(t *testing.T) {
+	userID := uuid.New()
+	repo := newFakeUserRepository()
+	media := newFakeMediaBinder()
+	svc := NewService(repo, media)
+
+	err := svc.DeleteAvatar(context.Background(), userID)
+	if !errors.Is(err, ErrUserNotFound) {
+		t.Fatalf("expected ErrUserNotFound, got %v", err)
+	}
+}
+
+func TestService_DeleteAvatar_SupersedeError(t *testing.T) {
+	userID := uuid.New()
+	avatarID := uuid.New()
+
+	repo := newFakeUserRepository(User{ID: userID, AvatarUploadID: &avatarID})
+	media := newFakeMediaBinder()
+	media.supersedeErr = errors.New("storage error")
+	svc := NewService(repo, media)
+
+	err := svc.DeleteAvatar(context.Background(), userID)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	user, _ := repo.FindByID(context.Background(), userID)
+	if user.AvatarUploadID == nil || *user.AvatarUploadID != avatarID {
+		t.Errorf("expected avatar to remain %v on error, got %v", avatarID, user.AvatarUploadID)
+	}
+}
+
+func TestService_DeleteBanner_Success(t *testing.T) {
+	userID := uuid.New()
+	bannerID := uuid.New()
+
+	repo := newFakeUserRepository(User{ID: userID, BannerUploadID: &bannerID})
+	media := newFakeMediaBinder()
+	svc := NewService(repo, media)
+
+	if err := svc.DeleteBanner(context.Background(), userID); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	updatedUser, _ := repo.FindByID(context.Background(), userID)
+	if updatedUser.BannerUploadID != nil {
+		t.Errorf("expected banner to be nil, got %v", updatedUser.BannerUploadID)
+	}
+	if !media.supersededUploads[bannerID] {
+		t.Errorf("expected banner %v to be marked superseded", bannerID)
+	}
+}
+
+func TestService_DeleteBanner_Idempotent(t *testing.T) {
+	userID := uuid.New()
+
+	repo := newFakeUserRepository(User{ID: userID, BannerUploadID: nil})
+	media := newFakeMediaBinder()
+	svc := NewService(repo, media)
+
+	if err := svc.DeleteBanner(context.Background(), userID); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(media.supersededUploads) > 0 {
+		t.Errorf("expected no superseded calls on nil banner, got %v", media.supersededUploads)
+	}
+}
+
+func TestService_DeleteBanner_UserNotFound(t *testing.T) {
+	userID := uuid.New()
+	repo := newFakeUserRepository()
+	media := newFakeMediaBinder()
+	svc := NewService(repo, media)
+
+	err := svc.DeleteBanner(context.Background(), userID)
+	if !errors.Is(err, ErrUserNotFound) {
+		t.Fatalf("expected ErrUserNotFound, got %v", err)
+	}
+}
+
+func TestService_DeleteBanner_SupersedeError(t *testing.T) {
+	userID := uuid.New()
+	bannerID := uuid.New()
+
+	repo := newFakeUserRepository(User{ID: userID, BannerUploadID: &bannerID})
+	media := newFakeMediaBinder()
+	media.supersedeErr = errors.New("storage error")
+	svc := NewService(repo, media)
+
+	err := svc.DeleteBanner(context.Background(), userID)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	user, _ := repo.FindByID(context.Background(), userID)
+	if user.BannerUploadID == nil || *user.BannerUploadID != bannerID {
+		t.Errorf("expected banner to remain %v on error, got %v", bannerID, user.BannerUploadID)
 	}
 }

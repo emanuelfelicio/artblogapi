@@ -656,6 +656,24 @@ paths:
       tags:
       - users
   /users/me/avatar:
+    delete:
+      description: Removes the avatar of the authenticated user.
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+      security:
+      - BearerAuth: []
+      summary: Delete avatar
+      tags:
+      - users
     put:
       consumes:
       - application/json
@@ -692,6 +710,24 @@ paths:
       tags:
       - users
   /users/me/banner:
+    delete:
+      description: Removes the banner of the authenticated user.
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+      security:
+      - BearerAuth: []
+      summary: Delete banner
+      tags:
+      - users
     put:
       consumes:
       - application/json

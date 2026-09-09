@@ -245,6 +245,44 @@ func TestRepository_UpdateAvatarAndBanner(t *testing.T) {
 	})
 }
 
+func TestRepository_DeleteAvatarAndBanner(t *testing.T) {
+	t.Run("clears user avatar and banner FKs to null", func(t *testing.T) {
+		ctx := setup(t)
+		u := newTestUser()
+		mustCreateUser(t, ctx, u)
+
+		avatarID := uuid.New()
+		bannerID := uuid.New()
+		mustCreateUploadWithPurpose(t, ctx, avatarID, u.ID, "avatars/pic.png", "BOUND", "AVATAR")
+		mustCreateUploadWithPurpose(t, ctx, bannerID, u.ID, "banners/pic.png", "BOUND", "BANNER")
+
+		if err := testRepo.UpdateAvatar(ctx, u.ID, avatarID); err != nil {
+			t.Fatalf("UpdateAvatar: %v", err)
+		}
+		if err := testRepo.UpdateBanner(ctx, u.ID, bannerID); err != nil {
+			t.Fatalf("UpdateBanner: %v", err)
+		}
+
+		if err := testRepo.DeleteAvatar(ctx, u.ID); err != nil {
+			t.Fatalf("DeleteAvatar: %v", err)
+		}
+		if err := testRepo.DeleteBanner(ctx, u.ID); err != nil {
+			t.Fatalf("DeleteBanner: %v", err)
+		}
+
+		userEntity, err := testRepo.FindUserByIDForUpdate(ctx, u.ID)
+		if err != nil {
+			t.Fatalf("FindUserByIDForUpdate: %v", err)
+		}
+		if userEntity.AvatarUploadID != nil {
+			t.Errorf("expected AvatarUploadID to be nil, got %v", userEntity.AvatarUploadID)
+		}
+		if userEntity.BannerUploadID != nil {
+			t.Errorf("expected BannerUploadID to be nil, got %v", userEntity.BannerUploadID)
+		}
+	})
+}
+
 func TestRepository_WithTransaction(t *testing.T) {
 	t.Run("executes operations inside a single transaction with commit", func(t *testing.T) {
 		ctx := setup(t)

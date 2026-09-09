@@ -105,12 +105,32 @@ func (r *repository) UpdateAvatar(ctx context.Context, userID, uploadID uuid.UUI
 	return nil
 }
 
+func (r *repository) DeleteAvatar(ctx context.Context, userID uuid.UUID) error {
+	if err := r.q(ctx).UpdateUserAvatar(ctx, dbgen.UpdateUserAvatarParams{
+		ID:             userID,
+		AvatarUploadID: pgtype.UUID{Valid: false},
+	}); err != nil {
+		return fmt.Errorf("delete_avatar: %w", err)
+	}
+	return nil
+}
+
 func (r *repository) UpdateBanner(ctx context.Context, userID, uploadID uuid.UUID) error {
 	if err := r.q(ctx).UpdateUserBanner(ctx, dbgen.UpdateUserBannerParams{
 		ID:             userID,
 		BannerUploadID: pgtype.UUID{Bytes: uploadID, Valid: true},
 	}); err != nil {
 		return fmt.Errorf("update_banner: %w", err)
+	}
+	return nil
+}
+
+func (r *repository) DeleteBanner(ctx context.Context, userID uuid.UUID) error {
+	if err := r.q(ctx).UpdateUserBanner(ctx, dbgen.UpdateUserBannerParams{
+		ID:             userID,
+		BannerUploadID: pgtype.UUID{Valid: false},
+	}); err != nil {
+		return fmt.Errorf("delete_banner: %w", err)
 	}
 	return nil
 }

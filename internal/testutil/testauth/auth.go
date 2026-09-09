@@ -12,3 +12,10 @@ func WithPrincipal(principalID string) gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// WithoutPrincipal is a stub middleware that rejects requests with 401 Unauthorized to simulate missing authentication.
+func WithoutPrincipal() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.AbortWithStatus(401)
+	}
+}

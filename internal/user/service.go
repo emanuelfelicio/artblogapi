@@ -17,7 +17,9 @@ type Repository interface {
 	FindByID(ctx context.Context, id uuid.UUID) (User, error)
 	UpdateProfile(ctx context.Context, id uuid.UUID, displayName, bio *string) (User, error)
 	UpdateAvatar(ctx context.Context, userID, uploadID uuid.UUID) error
+	DeleteAvatar(ctx context.Context, userID uuid.UUID) error
 	UpdateBanner(ctx context.Context, userID, uploadID uuid.UUID) error
+	DeleteBanner(ctx context.Context, userID uuid.UUID) error
 
 	WithTransaction(ctx context.Context, fn func(txCtx context.Context) error) error
 	FindUserByIDForUpdate(ctx context.Context, userID uuid.UUID) (User, error)
@@ -67,6 +69,47 @@ func (s *service) UpdateBanner(ctx context.Context, userID uuid.UUID, uploadIDSt
 		return s.repo.UpdateBanner(txCtx, userID, uploadID)
 	}, func(u User) *uuid.UUID {
 		return u.BannerUploadID
+	})
+}
+
+func (s *service) DeleteAvatar(ctx context.Context, userID uuid.UUID) error {
+	return s.unbindMedia(ctx, userID, func(txCtx context.Context) error {
+		return s.repo.DeleteAvatar(txCtx, userID)
+	}, func(u User) *uuid.UUID {
+		return u.AvatarUploadID
+	})
+}
+
+func (s *service) DeleteBanner(ctx context.Context, userID uuid.UUID) error {
+	return s.unbindMedia(ctx, userID, func(txCtx context.Context) error {
+		return s.repo.DeleteBanner(txCtx, userID)
+	}, func(u User) *uuid.UUID {
+		return u.BannerUploadID
+	})
+}
+
+func (s *service) unbindMedia(
+	ctx context.Context,
+	userID uuid.UUID,
+	clearFK func(txCtx context.Context) error,
+	getUploadID func(u User) *uuid.UUID,
+) error {
+	return s.repo.WithTransaction(ctx, func(txCtx context.Context) error {
+		userEntity, err := s.repo.FindUserByIDForUpdate(txCtx, userID)
+		if err != nil {
+			return err
+		}
+
+		uploadID := getUploadID(userEntity)
+		if uploadID == nil {
+			return nil
+		}
+
+		if err := s.media.Supersede(txCtx, *uploadID); err != nil {
+			return err
+		}
+
+		return clearFK(txCtx)
 	})
 }
 

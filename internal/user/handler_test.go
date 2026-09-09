@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -22,7 +23,9 @@ type stubUserService struct {
 	getMyProfile     func(ctx context.Context, userID uuid.UUID) (User, error)
 	updateProfile    func(ctx context.Context, userID uuid.UUID, displayName, bio *string) (User, error)
 	updateAvatar     func(ctx context.Context, userID uuid.UUID, uploadIDStr string) error
+	deleteAvatar     func(ctx context.Context, userID uuid.UUID) error
 	updateBanner     func(ctx context.Context, userID uuid.UUID, uploadIDStr string) error
+	deleteBanner     func(ctx context.Context, userID uuid.UUID) error
 }
 
 func (s *stubUserService) GetPublicProfile(ctx context.Context, username string) (User, error) {
@@ -53,9 +56,23 @@ func (s *stubUserService) UpdateAvatar(ctx context.Context, userID uuid.UUID, up
 	return nil
 }
 
+func (s *stubUserService) DeleteAvatar(ctx context.Context, userID uuid.UUID) error {
+	if s.deleteAvatar != nil {
+		return s.deleteAvatar(ctx, userID)
+	}
+	return nil
+}
+
 func (s *stubUserService) UpdateBanner(ctx context.Context, userID uuid.UUID, uploadIDStr string) error {
 	if s.updateBanner != nil {
 		return s.updateBanner(ctx, userID, uploadIDStr)
+	}
+	return nil
+}
+
+func (s *stubUserService) DeleteBanner(ctx context.Context, userID uuid.UUID) error {
+	if s.deleteBanner != nil {
+		return s.deleteBanner(ctx, userID)
 	}
 	return nil
 }
@@ -349,5 +366,81 @@ func TestHandler_BannerURL_Fallback(t *testing.T) {
 	resp := testhttp.DecodeResponse[PublicProfileResponse](t, w)
 	if resp.Data.BannerURL != "http://cdn.example.com/default/banner.png" {
 		t.Errorf("expected default banner URL, got %q", resp.Data.BannerURL)
+	}
+}
+
+// --- DELETE /me/avatar ---
+
+func TestHandler_DeleteAvatar_204(t *testing.T) {
+	svc := &stubUserService{
+		deleteAvatar: func(_ context.Context, _ uuid.UUID) error { return nil },
+	}
+	r := setupTestRouter(svc, testauth.WithPrincipal(uuid.NewString()))
+	w := testhttp.DoRequest(t, r, http.MethodDelete, "/api/v1/users/me/avatar", nil)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandler_DeleteAvatar_401_Unauthorized(t *testing.T) {
+	svc := &stubUserService{}
+	r := setupTestRouter(svc, testauth.WithoutPrincipal())
+	w := testhttp.DoRequest(t, r, http.MethodDelete, "/api/v1/users/me/avatar", nil)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", w.Code)
+	}
+}
+
+func TestHandler_DeleteAvatar_500_ServiceError(t *testing.T) {
+	svc := &stubUserService{
+		deleteAvatar: func(_ context.Context, _ uuid.UUID) error {
+			return errors.New("database failure")
+		},
+	}
+	r := setupTestRouter(svc, testauth.WithPrincipal(uuid.NewString()))
+	w := testhttp.DoRequest(t, r, http.MethodDelete, "/api/v1/users/me/avatar", nil)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// --- DELETE /me/banner ---
+
+func TestHandler_DeleteBanner_204(t *testing.T) {
+	svc := &stubUserService{
+		deleteBanner: func(_ context.Context, _ uuid.UUID) error { return nil },
+	}
+	r := setupTestRouter(svc, testauth.WithPrincipal(uuid.NewString()))
+	w := testhttp.DoRequest(t, r, http.MethodDelete, "/api/v1/users/me/banner", nil)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandler_DeleteBanner_401_Unauthorized(t *testing.T) {
+	svc := &stubUserService{}
+	r := setupTestRouter(svc, testauth.WithoutPrincipal())
+	w := testhttp.DoRequest(t, r, http.MethodDelete, "/api/v1/users/me/banner", nil)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", w.Code)
+	}
+}
+
+func TestHandler_DeleteBanner_500_ServiceError(t *testing.T) {
+	svc := &stubUserService{
+		deleteBanner: func(_ context.Context, _ uuid.UUID) error {
+			return errors.New("database failure")
+		},
+	}
+	r := setupTestRouter(svc, testauth.WithPrincipal(uuid.NewString()))
+	w := testhttp.DoRequest(t, r, http.MethodDelete, "/api/v1/users/me/banner", nil)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
 	}
 }

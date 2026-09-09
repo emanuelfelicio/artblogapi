@@ -19,7 +19,9 @@ type UserService interface {
 	GetMyProfile(ctx context.Context, userID uuid.UUID) (User, error)
 	UpdateProfile(ctx context.Context, userID uuid.UUID, displayName, bio *string) (User, error)
 	UpdateAvatar(ctx context.Context, userID uuid.UUID, uploadIDStr string) error
+	DeleteAvatar(ctx context.Context, userID uuid.UUID) error
 	UpdateBanner(ctx context.Context, userID uuid.UUID, uploadIDStr string) error
+	DeleteBanner(ctx context.Context, userID uuid.UUID) error
 }
 
 type handler struct {
@@ -220,6 +222,60 @@ func (h *handler) UpdateBanner(c *gin.Context) {
 			return
 		}
 		h.logger.Error("update_banner_failed", slog.Any("err", err))
+		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "internal error")
+		return
+	}
+
+	response.SuccessNoContent(c, http.StatusNoContent)
+}
+
+// DeleteAvatar godoc
+//
+//	@Summary		Delete avatar
+//	@Description	Removes the avatar of the authenticated user.
+//	@Tags			users
+//	@Security		BearerAuth
+//	@Success		204	"No Content"
+//	@Failure		401	{object}	response.ErrorResponse[any]
+//	@Failure		500	{object}	response.ErrorResponse[any]
+//	@Router			/users/me/avatar [delete]
+func (h *handler) DeleteAvatar(c *gin.Context) {
+	userID, err := auth.GetUserID(c)
+	if err != nil {
+		h.logger.Error("auth_error", slog.Any("err", err))
+		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "internal error")
+		return
+	}
+
+	if err := h.service.DeleteAvatar(c.Request.Context(), userID); err != nil {
+		h.logger.Error("delete_avatar_failed", slog.Any("err", err))
+		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "internal error")
+		return
+	}
+
+	response.SuccessNoContent(c, http.StatusNoContent)
+}
+
+// DeleteBanner godoc
+//
+//	@Summary		Delete banner
+//	@Description	Removes the banner of the authenticated user.
+//	@Tags			users
+//	@Security		BearerAuth
+//	@Success		204	"No Content"
+//	@Failure		401	{object}	response.ErrorResponse[any]
+//	@Failure		500	{object}	response.ErrorResponse[any]
+//	@Router			/users/me/banner [delete]
+func (h *handler) DeleteBanner(c *gin.Context) {
+	userID, err := auth.GetUserID(c)
+	if err != nil {
+		h.logger.Error("auth_error", slog.Any("err", err))
+		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "internal error")
+		return
+	}
+
+	if err := h.service.DeleteBanner(c.Request.Context(), userID); err != nil {
+		h.logger.Error("delete_banner_failed", slog.Any("err", err))
 		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "internal error")
 		return
 	}
