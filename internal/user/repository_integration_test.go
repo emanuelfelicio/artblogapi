@@ -21,10 +21,6 @@ var (
 	testStorageRepo storage.Repository
 )
 
-type nopLogger struct{}
-
-func (n *nopLogger) Printf(format string, v ...any) {}
-
 func TestMain(m *testing.M) {
 	ctx := context.Background()
 	var container *postgres.PostgresContainer
