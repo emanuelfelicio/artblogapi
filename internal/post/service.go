@@ -16,16 +16,16 @@ type Repository interface {
 	WithTransaction(ctx context.Context, fn func(txCtx context.Context) error) error
 
 	CreatePost(ctx context.Context, id, authorID uuid.UUID, title, content string) (Post, error)
-	GetPostByID(ctx context.Context, id uuid.UUID) (Post, error)
+	GetPostWithImages(ctx context.Context, id uuid.UUID) (Post, error)
 	GetPostByIDForUpdate(ctx context.Context, id uuid.UUID) (Post, error)
 	UpdatePost(ctx context.Context, id uuid.UUID, title, content *string) (Post, error)
 	DeletePost(ctx context.Context, id uuid.UUID) error
 
-	InsertPostImage(ctx context.Context, postID, uploadID uuid.UUID, position int16) error
-	GetPostImagesByPostID(ctx context.Context, postID uuid.UUID) ([]PostImage, error)
+	BatchInsertPostImages(ctx context.Context, postID uuid.UUID, uploadIDs []uuid.UUID, positions []int16) error
+	DeletePostImages(ctx context.Context, postID uuid.UUID, uploadIDs []uuid.UUID) error
+	UpdatePostImagePositions(ctx context.Context, postID uuid.UUID, uploadIDs []uuid.UUID, positions []int16) error
+	DeletePostImagesByPostID(ctx context.Context, postID uuid.UUID) ([]uuid.UUID, error)
 	GetPostImagesByPostIDs(ctx context.Context, postIDs []uuid.UUID) (map[uuid.UUID][]PostImage, error)
-	DeletePostImage(ctx context.Context, postID, uploadID uuid.UUID) error
-	UpdatePostImagePosition(ctx context.Context, postID, uploadID uuid.UUID, position int16) error
 	ListRecentPosts(ctx context.Context, limit, offset int32) ([]Post, error)
 	ListPostsByAuthor(ctx context.Context, authorID uuid.UUID, limit, offset int32) ([]Post, error)
 }
@@ -66,29 +66,35 @@ func (s *service) CreatePost(ctx context.Context, authorID uuid.UUID, title, con
 		return Post{}, err
 	}
 
+	positions := make([]int16, len(parsedUploadIDs))
+	for i := range parsedUploadIDs {
+		positions[i] = int16(i)
+	}
+
 	var createdPost Post
 	err = s.repo.WithTransaction(ctx, func(txCtx context.Context) error {
-		p, err := s.repo.CreatePost(txCtx, postID, authorID, validatedTitle, validatedContent)
+		_, err := s.repo.CreatePost(txCtx, postID, authorID, validatedTitle, validatedContent)
 		if err != nil {
 			return err
 		}
 
-		for i, uploadID := range parsedUploadIDs {
+		for _, uploadID := range parsedUploadIDs {
 			if err := s.media.Bind(txCtx, uploadID, authorID, storage.PurposePOSTIMAGE); err != nil {
 				return err
 			}
+		}
 
-			if err := s.repo.InsertPostImage(txCtx, postID, uploadID, int16(i)); err != nil {
+		if len(parsedUploadIDs) > 0 {
+			if err := s.repo.BatchInsertPostImages(txCtx, postID, parsedUploadIDs, positions); err != nil {
 				return err
 			}
 		}
 
-		images, err := s.repo.GetPostImagesByPostID(txCtx, postID)
+		fullPost, err := s.repo.GetPostWithImages(txCtx, postID)
 		if err != nil {
 			return err
 		}
-		p.Images = images
-		createdPost = p
+		createdPost = fullPost
 		return nil
 	})
 	if err != nil {
@@ -99,18 +105,7 @@ func (s *service) CreatePost(ctx context.Context, authorID uuid.UUID, title, con
 }
 
 func (s *service) GetPost(ctx context.Context, id uuid.UUID) (Post, error) {
-	post, err := s.repo.GetPostByID(ctx, id)
-	if err != nil {
-		return Post{}, err
-	}
-
-	images, err := s.repo.GetPostImagesByPostID(ctx, id)
-	if err != nil {
-		return Post{}, err
-	}
-	post.Images = images
-
-	return post, nil
+	return s.repo.GetPostWithImages(ctx, id)
 }
 
 func (s *service) ListRecentPosts(ctx context.Context, limit, offset int32) ([]Post, error) {
@@ -182,67 +177,99 @@ func (s *service) UpdatePost(ctx context.Context, postID, authorID uuid.UUID, ti
 			return ErrPostForbidden
 		}
 
+		postResult := currentPost
 		if title != nil || content != nil {
-			if _, err := s.repo.UpdatePost(txCtx, postID, title, content); err != nil {
-				return err
-			}
-		}
-
-		if imageUploadIDs != nil {
-			currentImages, err := s.repo.GetPostImagesByPostID(txCtx, postID)
+			p, err := s.repo.UpdatePost(txCtx, postID, title, content)
 			if err != nil {
 				return err
 			}
+			postResult = p
+		}
 
-			currentMap := make(map[uuid.UUID]PostImage, len(currentImages))
+		if imageUploadIDs != nil {
+			imagesMap, err := s.repo.GetPostImagesByPostIDs(txCtx, []uuid.UUID{postID})
+			if err != nil {
+				return err
+			}
+			currentImages := imagesMap[postID]
+
+			current := make(map[uuid.UUID]PostImage, len(currentImages))
 			for _, img := range currentImages {
-				currentMap[img.UploadID] = img
+				current[img.UploadID] = img
 			}
 
-			desiredMap := make(map[uuid.UUID]int, len(desiredUploadIDs))
-			for i, uID := range desiredUploadIDs {
-				desiredMap[uID] = i
+			desired := make(map[uuid.UUID]struct{}, len(desiredUploadIDs))
+			for _, uID := range desiredUploadIDs {
+				desired[uID] = struct{}{}
 			}
 
+			var toDeleteIDs []uuid.UUID
 			for _, img := range currentImages {
-				if _, exists := desiredMap[img.UploadID]; !exists {
-					if err := s.repo.DeletePostImage(txCtx, postID, img.UploadID); err != nil {
-						return err
-					}
-					if err := s.media.Supersede(txCtx, img.UploadID); err != nil {
+				if _, exists := desired[img.UploadID]; !exists {
+					toDeleteIDs = append(toDeleteIDs, img.UploadID)
+				}
+			}
+
+			if len(toDeleteIDs) > 0 {
+				if err := s.repo.DeletePostImages(txCtx, postID, toDeleteIDs); err != nil {
+					return err
+				}
+				for _, uID := range toDeleteIDs {
+					if err := s.media.Supersede(txCtx, uID); err != nil {
 						return err
 					}
 				}
 			}
 
+			var toInsertIDs []uuid.UUID
+			var toInsertPositions []int16
+			var toUpdateIDs []uuid.UUID
+			var toUpdatePositions []int16
+
 			for i, uID := range desiredUploadIDs {
-				if img, exists := currentMap[uID]; exists {
+				if img, exists := current[uID]; exists {
 					if img.Position != i {
-						if err := s.repo.UpdatePostImagePosition(txCtx, postID, uID, int16(i)); err != nil {
-							return err
-						}
+						toUpdateIDs = append(toUpdateIDs, uID)
+						toUpdatePositions = append(toUpdatePositions, int16(i))
 					}
 				} else {
-					if err := s.media.Bind(txCtx, uID, authorID, storage.PurposePOSTIMAGE); err != nil {
-						return err
-					}
-					if err := s.repo.InsertPostImage(txCtx, postID, uID, int16(i)); err != nil {
-						return err
-					}
+					toInsertIDs = append(toInsertIDs, uID)
+					toInsertPositions = append(toInsertPositions, int16(i))
 				}
 			}
+
+			for _, uID := range toInsertIDs {
+				if err := s.media.Bind(txCtx, uID, authorID, storage.PurposePOSTIMAGE); err != nil {
+					return err
+				}
+			}
+
+			if len(toInsertIDs) > 0 {
+				if err := s.repo.BatchInsertPostImages(txCtx, postID, toInsertIDs, toInsertPositions); err != nil {
+					return err
+				}
+			}
+
+			if len(toUpdateIDs) > 0 {
+				if err := s.repo.UpdatePostImagePositions(txCtx, postID, toUpdateIDs, toUpdatePositions); err != nil {
+					return err
+				}
+			}
+
+			finalImagesMap, err := s.repo.GetPostImagesByPostIDs(txCtx, []uuid.UUID{postID})
+			if err != nil {
+				return err
+			}
+			postResult.Images = finalImagesMap[postID]
+		} else {
+			imagesMap, err := s.repo.GetPostImagesByPostIDs(txCtx, []uuid.UUID{postID})
+			if err != nil {
+				return err
+			}
+			postResult.Images = imagesMap[postID]
 		}
 
-		p, err := s.repo.GetPostByID(txCtx, postID)
-		if err != nil {
-			return err
-		}
-		images, err := s.repo.GetPostImagesByPostID(txCtx, postID)
-		if err != nil {
-			return err
-		}
-		p.Images = images
-		updatedPost = p
+		updatedPost = postResult
 		return nil
 	})
 	if err != nil {
@@ -263,13 +290,13 @@ func (s *service) DeletePost(ctx context.Context, postID, authorID uuid.UUID) er
 			return ErrPostForbidden
 		}
 
-		images, err := s.repo.GetPostImagesByPostID(txCtx, postID)
+		uploadIDs, err := s.repo.DeletePostImagesByPostID(txCtx, postID)
 		if err != nil {
 			return err
 		}
 
-		for _, img := range images {
-			if err := s.media.Supersede(txCtx, img.UploadID); err != nil {
+		for _, uploadID := range uploadIDs {
+			if err := s.media.Supersede(txCtx, uploadID); err != nil {
 				return err
 			}
 		}
