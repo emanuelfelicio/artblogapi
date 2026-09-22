@@ -26,18 +26,16 @@ type PostService interface {
 }
 
 type handler struct {
-	service       PostService
-	logger        *slog.Logger
-	mediaBaseURL  string
-	defaultAvatar string
+	service      PostService
+	logger       *slog.Logger
+	mediaBaseURL string
 }
 
-func NewHandler(s PostService, l *slog.Logger, mediaBaseURL, defaultAvatar string) *handler {
+func NewHandler(s PostService, l *slog.Logger, mediaBaseURL string) *handler {
 	return &handler{
-		service:       s,
-		logger:        l,
-		mediaBaseURL:  mediaBaseURL,
-		defaultAvatar: defaultAvatar,
+		service:      s,
+		logger:       l,
+		mediaBaseURL: mediaBaseURL,
 	}
 }
 
@@ -318,14 +316,6 @@ func (h *handler) handleServiceError(c *gin.Context, err error, logMsg string) {
 }
 
 func (h *handler) toPostResponse(p Post) PostResponse {
-	var avatarURL *string
-	if p.Author.AvatarKey != nil && *p.Author.AvatarKey != "" {
-		url := h.resolveURL(p.Author.AvatarKey)
-		avatarURL = &url
-	} else if h.defaultAvatar != "" {
-		avatarURL = &h.defaultAvatar
-	}
-
 	images := make([]PostImageResponse, 0, len(p.Images))
 	for _, img := range p.Images {
 		images = append(images, PostImageResponse{
@@ -336,15 +326,10 @@ func (h *handler) toPostResponse(p Post) PostResponse {
 	}
 
 	return PostResponse{
-		ID:      p.ID.String(),
-		Title:   p.Title,
-		Content: p.Content,
-		Author: PostAuthorResponse{
-			ID:          p.Author.ID.String(),
-			Username:    p.Author.Username,
-			DisplayName: p.Author.DisplayName,
-			AvatarURL:   avatarURL,
-		},
+		ID:        p.ID.String(),
+		AuthorID:  p.AuthorID.String(),
+		Title:     p.Title,
+		Content:   p.Content,
 		Images:    images,
 		CreatedAt: p.CreatedAt,
 		UpdatedAt: p.UpdatedAt,

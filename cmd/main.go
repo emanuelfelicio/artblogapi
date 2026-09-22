@@ -132,7 +132,7 @@ func main() {
 
 	postRepo := post.NewRepository(queries, pool)
 	postService := post.NewService(postRepo, storageService)
-	postHandler := post.NewHandler(postService, logger, cfg.StoragePublicURL, cfg.DefaultAvatarURL)
+	postHandler := post.NewHandler(postService, logger, cfg.StoragePublicURL)
 
 	if cfg.AppEnv == "production" {
 		gin.SetMode(gin.ReleaseMode)
