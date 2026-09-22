@@ -103,6 +103,22 @@ func (ns NullUploadStatus) Value() (driver.Value, error) {
 	return string(ns.UploadStatus), nil
 }
 
+type Post struct {
+	ID        uuid.UUID
+	AuthorID  uuid.UUID
+	Title     string
+	Content   string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
+type PostImage struct {
+	PostID    uuid.UUID
+	UploadID  uuid.UUID
+	Position  int16
+	CreatedAt pgtype.Timestamptz
+}
+
 type Session struct {
 	ID        string
 	UserID    uuid.UUID

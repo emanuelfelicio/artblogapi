@@ -7,6 +7,23 @@ definitions:
     required:
     - upload_id
     type: object
+  CreatePostRequest:
+    properties:
+      content:
+        type: string
+      image_upload_ids:
+        items:
+          type: string
+        maxItems: 10
+        type: array
+      title:
+        maxLength: 150
+        minLength: 1
+        type: string
+    required:
+    - content
+    - title
+    type: object
   ErrorCode:
     enum:
     - PARSE_ERROR
@@ -157,6 +174,45 @@ definitions:
       username:
         type: string
     type: object
+  PostAuthorResponse:
+    properties:
+      avatar_url:
+        type: string
+      display_name:
+        type: string
+      id:
+        type: string
+      username:
+        type: string
+    type: object
+  PostImageResponse:
+    properties:
+      position:
+        type: integer
+      upload_id:
+        type: string
+      url:
+        type: string
+    type: object
+  PostResponse:
+    properties:
+      author:
+        $ref: '#/definitions/PostAuthorResponse'
+      content:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      images:
+        items:
+          $ref: '#/definitions/PostImageResponse'
+        type: array
+      title:
+        type: string
+      updated_at:
+        type: string
+    type: object
   PublicProfileResponse:
     properties:
       avatar_url:
@@ -208,6 +264,13 @@ definitions:
         example: Bearer
         type: string
     type: object
+  Response-array_PostResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/PostResponse'
+        type: array
+    type: object
   Response-internal_auth_LoginResponse:
     properties:
       data:
@@ -217,6 +280,11 @@ definitions:
     properties:
       data:
         $ref: '#/definitions/RegisterResponse'
+    type: object
+  Response-internal_post_PostResponse:
+    properties:
+      data:
+        $ref: '#/definitions/PostResponse'
     type: object
   Response-internal_storage_InitUploadResponse:
     properties:
@@ -251,6 +319,20 @@ definitions:
         type: string
     required:
     - upload_id
+    type: object
+  UpdatePostRequest:
+    properties:
+      content:
+        type: string
+      image_upload_ids:
+        items:
+          type: string
+        maxItems: 10
+        type: array
+      title:
+        maxLength: 150
+        minLength: 1
+        type: string
     type: object
   UpdateProfileRequest:
     properties:
@@ -439,6 +521,218 @@ paths:
       summary: Register a new user
       tags:
       - auth
+  /posts:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new post with optional carousel images (max 10).
+      parameters:
+      - description: Create post request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/CreatePostRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/Response-internal_post_PostResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+      security:
+      - BearerAuth: []
+      summary: Create post
+      tags:
+      - posts
+  /posts/{id}:
+    delete:
+      description: Deletes a post and marks associated media as superseded.
+      parameters:
+      - description: Post ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+      security:
+      - BearerAuth: []
+      summary: Delete post
+      tags:
+      - posts
+    get:
+      description: Retrieves post details including author and ordered carousel images.
+      parameters:
+      - description: Post ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/Response-internal_post_PostResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+      summary: Get post details
+      tags:
+      - posts
+    put:
+      consumes:
+      - application/json
+      description: Updates post title, content, and/or reconciles the image carousel.
+      parameters:
+      - description: Post ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update post request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/UpdatePostRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/Response-internal_post_PostResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+      security:
+      - BearerAuth: []
+      summary: Update post
+      tags:
+      - posts
+  /posts/author/{author_id}:
+    get:
+      description: Returns a paginated list of posts by a specific author.
+      parameters:
+      - description: Author UUID
+        in: path
+        name: author_id
+        required: true
+        type: string
+      - description: Number of posts to return (default 20, max 50)
+        in: query
+        name: limit
+        type: integer
+      - description: Offset for pagination (default 0)
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/Response-array_PostResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+      summary: List posts by author
+      tags:
+      - posts
+  /posts/recent:
+    get:
+      description: Returns a paginated list of recent posts with images.
+      parameters:
+      - description: Number of posts to return (default 20, max 50)
+        in: query
+        name: limit
+        type: integer
+      - description: Offset for pagination (default 0)
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/Response-array_PostResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+      summary: List recent posts
+      tags:
+      - posts
   /uploads/{id}:
     get:
       description: Returns the current status of an upload by its ID.
