@@ -18,19 +18,11 @@ const (
 type Post struct {
 	ID        uuid.UUID
 	AuthorID  uuid.UUID
-	Author    PostAuthor
 	Title     string
 	Content   string
 	Images    []PostImage
 	CreatedAt time.Time
 	UpdatedAt time.Time
-}
-
-type PostAuthor struct {
-	ID          uuid.UUID
-	Username    string
-	DisplayName string
-	AvatarKey   *string
 }
 
 type PostImage struct {

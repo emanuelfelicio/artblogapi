@@ -16,19 +16,12 @@ type UpdatePostRequest struct {
 
 type PostResponse struct {
 	ID        string              `json:"id"`
+	AuthorID  string              `json:"author_id"`
 	Title     string              `json:"title"`
 	Content   string              `json:"content"`
-	Author    PostAuthorResponse  `json:"author"`
 	Images    []PostImageResponse `json:"images"`
 	CreatedAt time.Time           `json:"created_at"`
 	UpdatedAt time.Time           `json:"updated_at"`
-}
-
-type PostAuthorResponse struct {
-	ID          string  `json:"id"`
-	Username    string  `json:"username"`
-	DisplayName string  `json:"display_name"`
-	AvatarURL   *string `json:"avatar_url,omitempty"`
 }
 
 type PostImageResponse struct {
