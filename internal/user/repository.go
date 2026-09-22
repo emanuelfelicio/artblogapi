@@ -187,6 +187,29 @@ func mapMyProfile(row dbgen.GetMyUserProfileByIDRow) User {
 	return u
 }
 
+func (r *repository) FindPublicProfilesByIDs(ctx context.Context, ids []uuid.UUID) ([]UserSummary, error) {
+	rows, err := r.q(ctx).GetPublicProfilesByIDs(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("find_public_profiles_by_ids: %w", err)
+	}
+
+	summaries := make([]UserSummary, 0, len(rows))
+	for _, row := range rows {
+		s := UserSummary{
+			ID:       row.ID,
+			Username: row.Username,
+		}
+		if row.DisplayName.Valid {
+			s.DisplayName = row.DisplayName.String
+		}
+		if row.AvatarKey.Valid {
+			s.AvatarKey = &row.AvatarKey.String
+		}
+		summaries = append(summaries, s)
+	}
+	return summaries, nil
+}
+
 // textParam converts an optional string to pgtype.Text.
 // A nil pointer produces Valid=false, which maps to NULL in Postgres.
 func textParam(value *string) pgtype.Text {

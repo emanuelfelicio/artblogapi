@@ -32,15 +32,16 @@ func (s *stubMediaBinder) Supersede(ctx context.Context, uploadID uuid.UUID) err
 }
 
 type stubRepository struct {
-	findByUsername        func(ctx context.Context, username string) (User, error)
-	findByID              func(ctx context.Context, id uuid.UUID) (User, error)
-	updateProfile         func(ctx context.Context, id uuid.UUID, displayName, bio *string) (User, error)
-	updateAvatar          func(ctx context.Context, userID, uploadID uuid.UUID) error
-	deleteAvatar          func(ctx context.Context, userID uuid.UUID) error
-	updateBanner          func(ctx context.Context, userID, uploadID uuid.UUID) error
-	deleteBanner          func(ctx context.Context, userID uuid.UUID) error
-	withTransaction       func(ctx context.Context, fn func(txCtx context.Context) error) error
-	findUserByIDForUpdate func(ctx context.Context, userID uuid.UUID) (User, error)
+	findByUsername          func(ctx context.Context, username string) (User, error)
+	findByID                func(ctx context.Context, id uuid.UUID) (User, error)
+	findPublicProfilesByIDs func(ctx context.Context, ids []uuid.UUID) ([]UserSummary, error)
+	updateProfile           func(ctx context.Context, id uuid.UUID, displayName, bio *string) (User, error)
+	updateAvatar            func(ctx context.Context, userID, uploadID uuid.UUID) error
+	deleteAvatar            func(ctx context.Context, userID uuid.UUID) error
+	updateBanner            func(ctx context.Context, userID, uploadID uuid.UUID) error
+	deleteBanner            func(ctx context.Context, userID uuid.UUID) error
+	withTransaction         func(ctx context.Context, fn func(txCtx context.Context) error) error
+	findUserByIDForUpdate   func(ctx context.Context, userID uuid.UUID) (User, error)
 }
 
 func (s *stubRepository) FindByUsername(ctx context.Context, username string) (User, error) {
@@ -55,6 +56,13 @@ func (s *stubRepository) FindByID(ctx context.Context, id uuid.UUID) (User, erro
 		return s.findByID(ctx, id)
 	}
 	return User{}, nil
+}
+
+func (s *stubRepository) FindPublicProfilesByIDs(ctx context.Context, ids []uuid.UUID) ([]UserSummary, error) {
+	if s.findPublicProfilesByIDs != nil {
+		return s.findPublicProfilesByIDs(ctx, ids)
+	}
+	return nil, nil
 }
 
 func (s *stubRepository) UpdateProfile(ctx context.Context, id uuid.UUID, displayName, bio *string) (User, error) {
@@ -326,6 +334,10 @@ func (f *fakeUserRepository) FindUserByIDForUpdate(_ context.Context, userID uui
 		return User{}, ErrUserNotFound
 	}
 	return u, nil
+}
+
+func (f *fakeUserRepository) FindPublicProfilesByIDs(_ context.Context, ids []uuid.UUID) ([]UserSummary, error) {
+	return nil, nil
 }
 
 func TestService_UpdateAvatar_Success(t *testing.T) {
@@ -678,5 +690,58 @@ func TestService_DeleteBanner_SupersedeError(t *testing.T) {
 	user, _ := repo.FindByID(context.Background(), userID)
 	if user.BannerUploadID == nil || *user.BannerUploadID != bannerID {
 		t.Errorf("expected banner to remain %v on error, got %v", bannerID, user.BannerUploadID)
+	}
+}
+
+func TestService_GetPublicProfilesByIDs_Deduplication(t *testing.T) {
+	id1 := uuid.New()
+	id2 := uuid.New()
+
+	var capturedIDs []uuid.UUID
+	repo := &stubRepository{
+		findPublicProfilesByIDs: func(_ context.Context, ids []uuid.UUID) ([]UserSummary, error) {
+			capturedIDs = ids
+			return []UserSummary{{ID: id1}, {ID: id2}}, nil
+		},
+	}
+
+	svc := NewService(repo, &stubMediaBinder{})
+	result, err := svc.GetPublicProfilesByIDs(context.Background(), []string{
+		id1.String(), id2.String(), id1.String(),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(capturedIDs) != 2 {
+		t.Errorf("expected 2 unique IDs sent to repo, got %d", len(capturedIDs))
+	}
+	if len(result) != 2 {
+		t.Errorf("expected 2 summaries, got %d", len(result))
+	}
+}
+
+func TestService_GetPublicProfilesByIDs_SkipsInvalidUUIDs(t *testing.T) {
+	id1 := uuid.New()
+
+	var capturedIDs []uuid.UUID
+	repo := &stubRepository{
+		findPublicProfilesByIDs: func(_ context.Context, ids []uuid.UUID) ([]UserSummary, error) {
+			capturedIDs = ids
+			return []UserSummary{{ID: id1}}, nil
+		},
+	}
+
+	svc := NewService(repo, &stubMediaBinder{})
+	result, err := svc.GetPublicProfilesByIDs(context.Background(), []string{
+		id1.String(), "not-a-uuid", "also-invalid",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(capturedIDs) != 1 {
+		t.Errorf("expected 1 valid ID sent to repo, got %d", len(capturedIDs))
+	}
+	if len(result) != 1 {
+		t.Errorf("expected 1 summary, got %d", len(result))
 	}
 }
