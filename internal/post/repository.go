@@ -49,14 +49,7 @@ func (r *repository) CreatePost(ctx context.Context, id, authorID uuid.UUID, tit
 		return Post{}, fmt.Errorf("create_post: %w", err)
 	}
 
-	return Post{
-		ID:        row.ID,
-		AuthorID:  row.AuthorID,
-		Title:     row.Title,
-		Content:   row.Content,
-		CreatedAt: row.CreatedAt.Time,
-		UpdatedAt: row.UpdatedAt.Time,
-	}, nil
+	return mapPost(row), nil
 }
 
 func (r *repository) GetPostByID(ctx context.Context, id uuid.UUID) (Post, error) {
@@ -68,7 +61,7 @@ func (r *repository) GetPostByID(ctx context.Context, id uuid.UUID) (Post, error
 		return Post{}, fmt.Errorf("get_post_by_id: %w", err)
 	}
 
-	return mapGetPostByIDRow(row), nil
+	return mapPost(row), nil
 }
 
 func (r *repository) GetPostByIDForUpdate(ctx context.Context, id uuid.UUID) (Post, error) {
@@ -80,14 +73,50 @@ func (r *repository) GetPostByIDForUpdate(ctx context.Context, id uuid.UUID) (Po
 		return Post{}, fmt.Errorf("get_post_by_id_for_update: %w", err)
 	}
 
-	return Post{
-		ID:        row.ID,
-		AuthorID:  row.AuthorID,
-		Title:     row.Title,
-		Content:   row.Content,
-		CreatedAt: row.CreatedAt.Time,
-		UpdatedAt: row.UpdatedAt.Time,
-	}, nil
+	return mapPost(row), nil
+}
+
+func (r *repository) GetPostWithImages(ctx context.Context, id uuid.UUID) (Post, error) {
+	rows, err := r.q(ctx).GetPostWithImagesByID(ctx, id)
+	if err != nil {
+		return Post{}, fmt.Errorf("get_post_with_images: %w", err)
+	}
+	if len(rows) == 0 {
+		return Post{}, ErrPostNotFound
+	}
+
+	p := Post{
+		ID:        rows[0].ID,
+		AuthorID:  rows[0].AuthorID,
+		Title:     rows[0].Title,
+		Content:   rows[0].Content,
+		CreatedAt: rows[0].CreatedAt.Time,
+		UpdatedAt: rows[0].UpdatedAt.Time,
+		Images:    make([]PostImage, 0, len(rows)),
+	}
+
+	for _, row := range rows {
+		if row.UploadID.Valid {
+			contentType := ""
+			if row.ContentType.Valid {
+				contentType = row.ContentType.String
+			}
+			objectKey := ""
+			if row.ObjectKey.Valid {
+				objectKey = row.ObjectKey.String
+			}
+			p.Images = append(p.Images, PostImage{
+				PostID:      row.ID,
+				UploadID:    row.UploadID.Bytes,
+				Position:    int(row.Position.Int16),
+				ObjectKey:   objectKey,
+				ContentType: contentType,
+				CreatedAt:   row.ImageCreatedAt.Time,
+			})
+		}
+	}
+
+	return p, nil
 }
 
 func (r *repository) UpdatePost(ctx context.Context, id uuid.UUID, title, content *string) (Post, error) {
@@ -103,14 +132,7 @@ func (r *repository) UpdatePost(ctx context.Context, id uuid.UUID, title, conten
 		return Post{}, fmt.Errorf("update_post: %w", err)
 	}
 
-	return Post{
-		ID:        row.ID,
-		AuthorID:  row.AuthorID,
-		Title:     row.Title,
-		Content:   row.Content,
-		CreatedAt: row.CreatedAt.Time,
-		UpdatedAt: row.UpdatedAt.Time,
-	}, nil
+	return mapPost(row), nil
 }
 
 func (r *repository) DeletePost(ctx context.Context, id uuid.UUID) error {
@@ -120,40 +142,56 @@ func (r *repository) DeletePost(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (r *repository) InsertPostImage(ctx context.Context, postID, uploadID uuid.UUID, position int16) error {
-	err := r.q(ctx).InsertPostImage(ctx, dbgen.InsertPostImageParams{
-		PostID:   postID,
-		UploadID: uploadID,
-		Position: position,
+func (r *repository) BatchInsertPostImages(ctx context.Context, postID uuid.UUID, uploadIDs []uuid.UUID, positions []int16) error {
+	if len(uploadIDs) == 0 {
+		return nil
+	}
+	err := r.q(ctx).BatchInsertPostImages(ctx, dbgen.BatchInsertPostImagesParams{
+		PostID:  postID,
+		Column2: uploadIDs,
+		Column3: positions,
 	})
 	if err != nil {
-		return fmt.Errorf("insert_post_image: %w", err)
+		return fmt.Errorf("batch_insert_post_images: %w", err)
 	}
 	return nil
 }
 
-func (r *repository) GetPostImagesByPostID(ctx context.Context, postID uuid.UUID) ([]PostImage, error) {
-	rows, err := r.q(ctx).GetPostImagesByPostID(ctx, postID)
+func (r *repository) DeletePostImages(ctx context.Context, postID uuid.UUID, uploadIDs []uuid.UUID) error {
+	if len(uploadIDs) == 0 {
+		return nil
+	}
+	err := r.q(ctx).DeletePostImages(ctx, dbgen.DeletePostImagesParams{
+		PostID:  postID,
+		Column2: uploadIDs,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("get_post_images_by_post_id: %w", err)
+		return fmt.Errorf("delete_post_images: %w", err)
 	}
+	return nil
+}
 
-	images := make([]PostImage, 0, len(rows))
-	for _, row := range rows {
-		contentType := ""
-		if row.ContentType.Valid {
-			contentType = row.ContentType.String
-		}
-		images = append(images, PostImage{
-			PostID:      row.PostID,
-			UploadID:    row.UploadID,
-			Position:    int(row.Position),
-			ObjectKey:   row.ObjectKey,
-			ContentType: contentType,
-			CreatedAt:   row.CreatedAt.Time,
-		})
+func (r *repository) UpdatePostImagePositions(ctx context.Context, postID uuid.UUID, uploadIDs []uuid.UUID, positions []int16) error {
+	if len(uploadIDs) == 0 {
+		return nil
 	}
-	return images, nil
+	err := r.q(ctx).UpdatePostImagePositions(ctx, dbgen.UpdatePostImagePositionsParams{
+		PostID:  postID,
+		Column2: uploadIDs,
+		Column3: positions,
+	})
+	if err != nil {
+		return fmt.Errorf("update_post_image_positions: %w", err)
+	}
+	return nil
+}
+
+func (r *repository) DeletePostImagesByPostID(ctx context.Context, postID uuid.UUID) ([]uuid.UUID, error) {
+	uploadIDs, err := r.q(ctx).DeletePostImagesByPostID(ctx, postID)
+	if err != nil {
+		return nil, fmt.Errorf("delete_post_images_by_post_id: %w", err)
+	}
+	return uploadIDs, nil
 }
 
 func (r *repository) GetPostImagesByPostIDs(ctx context.Context, postIDs []uuid.UUID) (map[uuid.UUID][]PostImage, error) {
@@ -184,29 +222,6 @@ func (r *repository) GetPostImagesByPostIDs(ctx context.Context, postIDs []uuid.
 	return result, nil
 }
 
-func (r *repository) DeletePostImage(ctx context.Context, postID, uploadID uuid.UUID) error {
-	err := r.q(ctx).DeletePostImage(ctx, dbgen.DeletePostImageParams{
-		PostID:   postID,
-		UploadID: uploadID,
-	})
-	if err != nil {
-		return fmt.Errorf("delete_post_image: %w", err)
-	}
-	return nil
-}
-
-func (r *repository) UpdatePostImagePosition(ctx context.Context, postID, uploadID uuid.UUID, position int16) error {
-	err := r.q(ctx).UpdatePostImagePosition(ctx, dbgen.UpdatePostImagePositionParams{
-		PostID:   postID,
-		UploadID: uploadID,
-		Position: position,
-	})
-	if err != nil {
-		return fmt.Errorf("update_post_image_position: %w", err)
-	}
-	return nil
-}
-
 func (r *repository) ListRecentPosts(ctx context.Context, limit, offset int32) ([]Post, error) {
 	rows, err := r.q(ctx).ListRecentPosts(ctx, dbgen.ListRecentPostsParams{
 		Limit:  limit,
@@ -218,7 +233,7 @@ func (r *repository) ListRecentPosts(ctx context.Context, limit, offset int32) (
 
 	posts := make([]Post, 0, len(rows))
 	for _, row := range rows {
-		posts = append(posts, mapListRecentPostsRow(row))
+		posts = append(posts, mapPost(row))
 	}
 	return posts, nil
 }
@@ -235,7 +250,7 @@ func (r *repository) ListPostsByAuthor(ctx context.Context, authorID uuid.UUID, 
 
 	posts := make([]Post, 0, len(rows))
 	for _, row := range rows {
-		posts = append(posts, mapListPostsByAuthorRow(row))
+		posts = append(posts, mapPost(row))
 	}
 	return posts, nil
 }
@@ -247,65 +262,13 @@ func textParam(value *string) pgtype.Text {
 	return pgtype.Text{String: *value, Valid: true}
 }
 
-func mapGetPostByIDRow(row dbgen.GetPostByIDRow) Post {
-	p := Post{
+func mapPost(row dbgen.Post) Post {
+	return Post{
 		ID:        row.ID,
 		AuthorID:  row.AuthorID,
 		Title:     row.Title,
 		Content:   row.Content,
 		CreatedAt: row.CreatedAt.Time,
 		UpdatedAt: row.UpdatedAt.Time,
-		Author: PostAuthor{
-			ID:          row.AuthorID,
-			Username:    row.AuthorUsername,
-			DisplayName: row.AuthorDisplayName.String,
-		},
 	}
-	if row.AuthorAvatarKey.Valid {
-		key := row.AuthorAvatarKey.String
-		p.Author.AvatarKey = &key
-	}
-	return p
-}
-
-func mapListRecentPostsRow(row dbgen.ListRecentPostsRow) Post {
-	p := Post{
-		ID:        row.ID,
-		AuthorID:  row.AuthorID,
-		Title:     row.Title,
-		Content:   row.Content,
-		CreatedAt: row.CreatedAt.Time,
-		UpdatedAt: row.UpdatedAt.Time,
-		Author: PostAuthor{
-			ID:          row.AuthorID,
-			Username:    row.AuthorUsername,
-			DisplayName: row.AuthorDisplayName.String,
-		},
-	}
-	if row.AuthorAvatarKey.Valid {
-		key := row.AuthorAvatarKey.String
-		p.Author.AvatarKey = &key
-	}
-	return p
-}
-
-func mapListPostsByAuthorRow(row dbgen.ListPostsByAuthorRow) Post {
-	p := Post{
-		ID:        row.ID,
-		AuthorID:  row.AuthorID,
-		Title:     row.Title,
-		Content:   row.Content,
-		CreatedAt: row.CreatedAt.Time,
-		UpdatedAt: row.UpdatedAt.Time,
-		Author: PostAuthor{
-			ID:          row.AuthorID,
-			Username:    row.AuthorUsername,
-			DisplayName: row.AuthorDisplayName.String,
-		},
-	}
-	if row.AuthorAvatarKey.Valid {
-		key := row.AuthorAvatarKey.String
-		p.Author.AvatarKey = &key
-	}
-	return p
 }
