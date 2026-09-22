@@ -734,6 +734,52 @@ const docTemplate = `{
                 ]
             }
         },
+        "/users/batch": {
+            "post": {
+                "description": "Returns minimal user summaries for a list of user IDs. Used by clients to resolve author data after fetching posts.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Batch get user summaries",
+                "parameters": [
+                    {
+                        "description": "List of user UUIDs (max 50)",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/BatchUsersRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/Response-array_internal_user_UserSummaryResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-array_github_com_emanuelfelicio_artblogapi_config_validation_FieldError"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    }
+                }
+            }
+        },
         "/users/me": {
             "get": {
                 "description": "Returns the full profile of the authenticated user.",
@@ -1047,6 +1093,22 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "BatchUsersRequest": {
+            "type": "object",
+            "required": [
+                "ids"
+            ],
+            "properties": {
+                "ids": {
+                    "type": "array",
+                    "maxItems": 50,
+                    "minItems": 1,
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "CompleteUploadRequest": {
             "type": "object",
             "required": [
@@ -1297,23 +1359,6 @@ const docTemplate = `{
                 }
             }
         },
-        "PostAuthorResponse": {
-            "type": "object",
-            "properties": {
-                "avatar_url": {
-                    "type": "string"
-                },
-                "display_name": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
         "PostImageResponse": {
             "type": "object",
             "properties": {
@@ -1331,8 +1376,8 @@ const docTemplate = `{
         "PostResponse": {
             "type": "object",
             "properties": {
-                "author": {
-                    "$ref": "#/definitions/PostAuthorResponse"
+                "author_id": {
+                    "type": "string"
                 },
                 "content": {
                     "type": "string"
@@ -1432,6 +1477,17 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/PostResponse"
+                    }
+                }
+            }
+        },
+        "Response-array_internal_user_UserSummaryResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/UserSummaryResponse"
                     }
                 }
             }
@@ -1594,6 +1650,23 @@ const docTemplate = `{
                 },
                 "status": {
                     "$ref": "#/definitions/UploadStatus"
+                }
+            }
+        },
+        "UserSummaryResponse": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
                 }
             }
         },

@@ -35,3 +35,14 @@ type MyProfileResponse struct {
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
+
+type BatchUsersRequest struct {
+	IDs []string `json:"ids" binding:"required,min=1,max=50,dive,uuid"`
+}
+
+type UserSummaryResponse struct {
+	ID          string `json:"id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+	AvatarURL   string `json:"avatar_url"`
+}

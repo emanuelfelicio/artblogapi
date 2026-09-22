@@ -17,6 +17,7 @@ import (
 type UserService interface {
 	GetPublicProfile(ctx context.Context, username string) (User, error)
 	GetMyProfile(ctx context.Context, userID uuid.UUID) (User, error)
+	GetPublicProfilesByIDs(ctx context.Context, rawIDs []string) ([]UserSummary, error)
 	UpdateProfile(ctx context.Context, userID uuid.UUID, displayName, bio *string) (User, error)
 	UpdateAvatar(ctx context.Context, userID uuid.UUID, uploadIDStr string) error
 	DeleteAvatar(ctx context.Context, userID uuid.UUID) error
@@ -281,6 +282,49 @@ func (h *handler) DeleteBanner(c *gin.Context) {
 	}
 
 	response.SuccessNoContent(c, http.StatusNoContent)
+}
+
+// BatchGetPublicProfiles godoc
+//
+//	@Summary		Batch get user summaries
+//	@Description	Returns minimal user summaries for a list of user IDs. Used by clients to resolve author data after fetching posts.
+//	@Tags			users
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		BatchUsersRequest								true	"List of user UUIDs (max 50)"
+//	@Success		200		{object}	response.Response[[]UserSummaryResponse]
+//	@Failure		400		{object}	response.ErrorResponse[[]validation.FieldError]
+//	@Failure		500		{object}	response.ErrorResponse[any]
+//	@Router			/users/batch [post]
+func (h *handler) BatchGetPublicProfiles(c *gin.Context) {
+	var req BatchUsersRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		if validationErr, ok := errors.AsType[validator.ValidationErrors](err); ok {
+			response.ValidationFail(c, validation.ToFieldError(validationErr))
+		} else {
+			response.Fail(c, http.StatusBadRequest, response.ParseCode, "invalid body")
+		}
+		return
+	}
+
+	summaries, err := h.service.GetPublicProfilesByIDs(c.Request.Context(), req.IDs)
+	if err != nil {
+		h.logger.Error("batch_get_public_profiles_failed", slog.Any("err", err))
+		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "internal error")
+		return
+	}
+
+	result := make([]UserSummaryResponse, 0, len(summaries))
+	for _, s := range summaries {
+		result = append(result, UserSummaryResponse{
+			ID:          s.ID.String(),
+			Username:    s.Username,
+			DisplayName: s.DisplayName,
+			AvatarURL:   h.resolveURL(s.AvatarKey),
+		})
+	}
+
+	response.Success(c, http.StatusOK, result)
 }
 
 // resolveURL builds the full public URL for a storage key. When mediaBaseURL is empty

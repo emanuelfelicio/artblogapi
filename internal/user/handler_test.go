@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -19,13 +20,14 @@ import (
 // --- STUBS ---
 
 type stubUserService struct {
-	getPublicProfile func(ctx context.Context, username string) (User, error)
-	getMyProfile     func(ctx context.Context, userID uuid.UUID) (User, error)
-	updateProfile    func(ctx context.Context, userID uuid.UUID, displayName, bio *string) (User, error)
-	updateAvatar     func(ctx context.Context, userID uuid.UUID, uploadIDStr string) error
-	deleteAvatar     func(ctx context.Context, userID uuid.UUID) error
-	updateBanner     func(ctx context.Context, userID uuid.UUID, uploadIDStr string) error
-	deleteBanner     func(ctx context.Context, userID uuid.UUID) error
+	getPublicProfile       func(ctx context.Context, username string) (User, error)
+	getMyProfile           func(ctx context.Context, userID uuid.UUID) (User, error)
+	getPublicProfilesByIDs func(ctx context.Context, rawIDs []string) ([]UserSummary, error)
+	updateProfile          func(ctx context.Context, userID uuid.UUID, displayName, bio *string) (User, error)
+	updateAvatar           func(ctx context.Context, userID uuid.UUID, uploadIDStr string) error
+	deleteAvatar           func(ctx context.Context, userID uuid.UUID) error
+	updateBanner           func(ctx context.Context, userID uuid.UUID, uploadIDStr string) error
+	deleteBanner           func(ctx context.Context, userID uuid.UUID) error
 }
 
 func (s *stubUserService) GetPublicProfile(ctx context.Context, username string) (User, error) {
@@ -40,6 +42,13 @@ func (s *stubUserService) GetMyProfile(ctx context.Context, userID uuid.UUID) (U
 		return s.getMyProfile(ctx, userID)
 	}
 	return User{}, nil
+}
+
+func (s *stubUserService) GetPublicProfilesByIDs(ctx context.Context, rawIDs []string) ([]UserSummary, error) {
+	if s.getPublicProfilesByIDs != nil {
+		return s.getPublicProfilesByIDs(ctx, rawIDs)
+	}
+	return nil, nil
 }
 
 func (s *stubUserService) UpdateProfile(ctx context.Context, userID uuid.UUID, displayName, bio *string) (User, error) {
@@ -442,5 +451,79 @@ func TestHandler_DeleteBanner_500_ServiceError(t *testing.T) {
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandler_BatchGetPublicProfiles_200(t *testing.T) {
+	id1 := uuid.New()
+	id2 := uuid.New()
+	avatarKey := "avatars/pic.jpg"
+
+	svc := &stubUserService{
+		getPublicProfilesByIDs: func(_ context.Context, rawIDs []string) ([]UserSummary, error) {
+			return []UserSummary{
+				{ID: id1, Username: "alice", DisplayName: "Alice", AvatarKey: &avatarKey},
+				{ID: id2, Username: "bob", DisplayName: "Bob", AvatarKey: nil},
+			}, nil
+		},
+	}
+	r := setupTestRouter(svc, testauth.WithPrincipal(uuid.NewString()))
+	w := testhttp.DoRequest(t, r, http.MethodPost, "/api/v1/users/batch", map[string]any{
+		"ids": []string{id1.String(), id2.String()},
+	})
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Data []struct {
+			ID          string `json:"id"`
+			Username    string `json:"username"`
+			DisplayName string `json:"display_name"`
+			AvatarURL   string `json:"avatar_url"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Data) != 2 {
+		t.Fatalf("expected 2 summaries, got %d", len(resp.Data))
+	}
+	if resp.Data[0].ID != id1.String() || resp.Data[0].Username != "alice" {
+		t.Errorf("unexpected first summary: %+v", resp.Data[0])
+	}
+	if resp.Data[0].AvatarURL != "http://cdn.example.com/avatars/pic.jpg" {
+		t.Errorf("expected resolved avatar URL, got %s", resp.Data[0].AvatarURL)
+	}
+	if resp.Data[1].AvatarURL != "" {
+		t.Errorf("expected empty avatar URL for bob, got %s", resp.Data[1].AvatarURL)
+	}
+}
+
+func TestHandler_BatchGetPublicProfiles_400_MissingBody(t *testing.T) {
+	svc := &stubUserService{}
+	r := setupTestRouter(svc, testauth.WithPrincipal(uuid.NewString()))
+	w := testhttp.DoRequest(t, r, http.MethodPost, "/api/v1/users/batch", map[string]any{})
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHandler_BatchGetPublicProfiles_400_TooManyIDs(t *testing.T) {
+	ids := make([]string, 51)
+	for i := range ids {
+		ids[i] = uuid.NewString()
+	}
+
+	svc := &stubUserService{}
+	r := setupTestRouter(svc, testauth.WithPrincipal(uuid.NewString()))
+	w := testhttp.DoRequest(t, r, http.MethodPost, "/api/v1/users/batch", map[string]any{
+		"ids": ids,
+	})
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 	}
 }

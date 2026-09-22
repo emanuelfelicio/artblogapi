@@ -36,3 +36,9 @@ UPDATE users SET avatar_upload_id = $2, updated_at = now() WHERE id = $1;
 
 -- name: UpdateUserBanner :exec
 UPDATE users SET banner_upload_id = $2, updated_at = now() WHERE id = $1;
+
+-- name: GetPublicProfilesByIDs :many
+SELECT u.id, u.username, u.display_name, up_a.object_key AS avatar_key
+FROM users u
+LEFT JOIN uploads up_a ON up_a.id = u.avatar_upload_id AND up_a.status = 'BOUND'
+WHERE u.id = ANY($1::uuid[]) AND u.is_active = true;

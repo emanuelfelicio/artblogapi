@@ -1,5 +1,16 @@
 basePath: /api/v1
 definitions:
+  BatchUsersRequest:
+    properties:
+      ids:
+        items:
+          type: string
+        maxItems: 50
+        minItems: 1
+        type: array
+    required:
+    - ids
+    type: object
   CompleteUploadRequest:
     properties:
       upload_id:
@@ -174,17 +185,6 @@ definitions:
       username:
         type: string
     type: object
-  PostAuthorResponse:
-    properties:
-      avatar_url:
-        type: string
-      display_name:
-        type: string
-      id:
-        type: string
-      username:
-        type: string
-    type: object
   PostImageResponse:
     properties:
       position:
@@ -196,8 +196,8 @@ definitions:
     type: object
   PostResponse:
     properties:
-      author:
-        $ref: '#/definitions/PostAuthorResponse'
+      author_id:
+        type: string
       content:
         type: string
       created_at:
@@ -269,6 +269,13 @@ definitions:
       data:
         items:
           $ref: '#/definitions/PostResponse'
+        type: array
+    type: object
+  Response-array_internal_user_UserSummaryResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/UserSummaryResponse'
         type: array
     type: object
   Response-internal_auth_LoginResponse:
@@ -381,6 +388,17 @@ definitions:
         type: string
       status:
         $ref: '#/definitions/UploadStatus'
+    type: object
+  UserSummaryResponse:
+    properties:
+      avatar_url:
+        type: string
+      display_name:
+        type: string
+      id:
+        type: string
+      username:
+        type: string
     type: object
   map_string_bool:
     additionalProperties:
@@ -885,6 +903,37 @@ paths:
           schema:
             $ref: '#/definitions/ErrorResponse-any'
       summary: Get public profile
+      tags:
+      - users
+  /users/batch:
+    post:
+      consumes:
+      - application/json
+      description: Returns minimal user summaries for a list of user IDs. Used by
+        clients to resolve author data after fetching posts.
+      parameters:
+      - description: List of user UUIDs (max 50)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/BatchUsersRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/Response-array_internal_user_UserSummaryResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ErrorResponse-array_github_com_emanuelfelicio_artblogapi_config_validation_FieldError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+      summary: Batch get user summaries
       tags:
       - users
   /users/me:

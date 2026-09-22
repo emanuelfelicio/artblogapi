@@ -6,6 +6,7 @@ func Routes(r *gin.RouterGroup, h *handler, authMiddleware gin.HandlerFunc) {
 	users := r.Group("/users")
 	{
 		users.GET("/:username", h.GetPublicProfile)
+		users.POST("/batch", h.BatchGetPublicProfiles)
 
 		protected := users.Group("/me", authMiddleware)
 		{

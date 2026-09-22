@@ -60,6 +60,45 @@ func (q *Queries) GetMyUserProfileByID(ctx context.Context, id uuid.UUID) (GetMy
 	return i, err
 }
 
+const getPublicProfilesByIDs = `-- name: GetPublicProfilesByIDs :many
+SELECT u.id, u.username, u.display_name, up_a.object_key AS avatar_key
+FROM users u
+LEFT JOIN uploads up_a ON up_a.id = u.avatar_upload_id AND up_a.status = 'BOUND'
+WHERE u.id = ANY($1::uuid[]) AND u.is_active = true
+`
+
+type GetPublicProfilesByIDsRow struct {
+	ID          uuid.UUID
+	Username    string
+	DisplayName pgtype.Text
+	AvatarKey   pgtype.Text
+}
+
+func (q *Queries) GetPublicProfilesByIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]GetPublicProfilesByIDsRow, error) {
+	rows, err := q.db.Query(ctx, getPublicProfilesByIDs, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetPublicProfilesByIDsRow
+	for rows.Next() {
+		var i GetPublicProfilesByIDsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Username,
+			&i.DisplayName,
+			&i.AvatarKey,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getPublicUserProfileByUsername = `-- name: GetPublicUserProfileByUsername :one
 SELECT
     u.id, u.username, u.email, u.display_name, u.bio,

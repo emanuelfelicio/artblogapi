@@ -20,3 +20,10 @@ type User struct {
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }
+
+type UserSummary struct {
+	ID          uuid.UUID
+	Username    string
+	DisplayName string
+	AvatarKey   *string
+}
