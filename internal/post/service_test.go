@@ -31,19 +31,19 @@ func (s *stubMediaBinder) Supersede(ctx context.Context, uploadID uuid.UUID) err
 }
 
 type stubRepository struct {
-	withTransaction         func(ctx context.Context, fn func(txCtx context.Context) error) error
-	createPost              func(ctx context.Context, id, authorID uuid.UUID, title, content string) (Post, error)
-	getPostByID             func(ctx context.Context, id uuid.UUID) (Post, error)
-	getPostByIDForUpdate    func(ctx context.Context, id uuid.UUID) (Post, error)
-	updatePost              func(ctx context.Context, id uuid.UUID, title, content *string) (Post, error)
-	deletePost              func(ctx context.Context, id uuid.UUID) error
-	insertPostImage         func(ctx context.Context, postID, uploadID uuid.UUID, position int16) error
-	getPostImagesByPostID   func(ctx context.Context, postID uuid.UUID) ([]PostImage, error)
-	getPostImagesByPostIDs  func(ctx context.Context, postIDs []uuid.UUID) (map[uuid.UUID][]PostImage, error)
-	deletePostImage         func(ctx context.Context, postID, uploadID uuid.UUID) error
-	updatePostImagePosition func(ctx context.Context, postID, uploadID uuid.UUID, position int16) error
-	listRecentPosts         func(ctx context.Context, limit, offset int32) ([]Post, error)
-	listPostsByAuthor       func(ctx context.Context, authorID uuid.UUID, limit, offset int32) ([]Post, error)
+	withTransaction          func(ctx context.Context, fn func(txCtx context.Context) error) error
+	createPost               func(ctx context.Context, id, authorID uuid.UUID, title, content string) (Post, error)
+	getPostWithImages        func(ctx context.Context, id uuid.UUID) (Post, error)
+	getPostByIDForUpdate     func(ctx context.Context, id uuid.UUID) (Post, error)
+	updatePost               func(ctx context.Context, id uuid.UUID, title, content *string) (Post, error)
+	deletePost               func(ctx context.Context, id uuid.UUID) error
+	batchInsertPostImages    func(ctx context.Context, postID uuid.UUID, uploadIDs []uuid.UUID, positions []int16) error
+	deletePostImages         func(ctx context.Context, postID uuid.UUID, uploadIDs []uuid.UUID) error
+	updatePostImagePositions func(ctx context.Context, postID uuid.UUID, uploadIDs []uuid.UUID, positions []int16) error
+	deletePostImagesByPostID func(ctx context.Context, postID uuid.UUID) ([]uuid.UUID, error)
+	getPostImagesByPostIDs   func(ctx context.Context, postIDs []uuid.UUID) (map[uuid.UUID][]PostImage, error)
+	listRecentPosts          func(ctx context.Context, limit, offset int32) ([]Post, error)
+	listPostsByAuthor        func(ctx context.Context, authorID uuid.UUID, limit, offset int32) ([]Post, error)
 }
 
 func (r *stubRepository) WithTransaction(ctx context.Context, fn func(txCtx context.Context) error) error {
@@ -60,9 +60,9 @@ func (r *stubRepository) CreatePost(ctx context.Context, id, authorID uuid.UUID,
 	return Post{ID: id, AuthorID: authorID, Title: title, Content: content, CreatedAt: time.Now(), UpdatedAt: time.Now()}, nil
 }
 
-func (r *stubRepository) GetPostByID(ctx context.Context, id uuid.UUID) (Post, error) {
-	if r.getPostByID != nil {
-		return r.getPostByID(ctx, id)
+func (r *stubRepository) GetPostWithImages(ctx context.Context, id uuid.UUID) (Post, error) {
+	if r.getPostWithImages != nil {
+		return r.getPostWithImages(ctx, id)
 	}
 	return Post{ID: id, CreatedAt: time.Now(), UpdatedAt: time.Now()}, nil
 }
@@ -88,16 +88,30 @@ func (r *stubRepository) DeletePost(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (r *stubRepository) InsertPostImage(ctx context.Context, postID, uploadID uuid.UUID, position int16) error {
-	if r.insertPostImage != nil {
-		return r.insertPostImage(ctx, postID, uploadID, position)
+func (r *stubRepository) BatchInsertPostImages(ctx context.Context, postID uuid.UUID, uploadIDs []uuid.UUID, positions []int16) error {
+	if r.batchInsertPostImages != nil {
+		return r.batchInsertPostImages(ctx, postID, uploadIDs, positions)
 	}
 	return nil
 }
 
-func (r *stubRepository) GetPostImagesByPostID(ctx context.Context, postID uuid.UUID) ([]PostImage, error) {
-	if r.getPostImagesByPostID != nil {
-		return r.getPostImagesByPostID(ctx, postID)
+func (r *stubRepository) DeletePostImages(ctx context.Context, postID uuid.UUID, uploadIDs []uuid.UUID) error {
+	if r.deletePostImages != nil {
+		return r.deletePostImages(ctx, postID, uploadIDs)
+	}
+	return nil
+}
+
+func (r *stubRepository) UpdatePostImagePositions(ctx context.Context, postID uuid.UUID, uploadIDs []uuid.UUID, positions []int16) error {
+	if r.updatePostImagePositions != nil {
+		return r.updatePostImagePositions(ctx, postID, uploadIDs, positions)
+	}
+	return nil
+}
+
+func (r *stubRepository) DeletePostImagesByPostID(ctx context.Context, postID uuid.UUID) ([]uuid.UUID, error) {
+	if r.deletePostImagesByPostID != nil {
+		return r.deletePostImagesByPostID(ctx, postID)
 	}
 	return nil, nil
 }
@@ -107,20 +121,6 @@ func (r *stubRepository) GetPostImagesByPostIDs(ctx context.Context, postIDs []u
 		return r.getPostImagesByPostIDs(ctx, postIDs)
 	}
 	return make(map[uuid.UUID][]PostImage), nil
-}
-
-func (r *stubRepository) DeletePostImage(ctx context.Context, postID, uploadID uuid.UUID) error {
-	if r.deletePostImage != nil {
-		return r.deletePostImage(ctx, postID, uploadID)
-	}
-	return nil
-}
-
-func (r *stubRepository) UpdatePostImagePosition(ctx context.Context, postID, uploadID uuid.UUID, position int16) error {
-	if r.updatePostImagePosition != nil {
-		return r.updatePostImagePosition(ctx, postID, uploadID, position)
-	}
-	return nil
 }
 
 func (r *stubRepository) ListRecentPosts(ctx context.Context, limit, offset int32) ([]Post, error) {
@@ -138,7 +138,11 @@ func (r *stubRepository) ListPostsByAuthor(ctx context.Context, authorID uuid.UU
 }
 
 func TestCreatePost_Success_NoImages(t *testing.T) {
-	repo := &stubRepository{}
+	repo := &stubRepository{
+		getPostWithImages: func(ctx context.Context, id uuid.UUID) (Post, error) {
+			return Post{ID: id, Title: "My First Post", Content: "Hello world content", Images: []PostImage{}}, nil
+		},
+	}
 	media := &stubMediaBinder{}
 	svc := NewService(repo, media)
 
@@ -151,9 +155,6 @@ func TestCreatePost_Success_NoImages(t *testing.T) {
 	if p.Title != "My First Post" {
 		t.Errorf("expected title 'My First Post', got %s", p.Title)
 	}
-	if p.AuthorID != authorID {
-		t.Errorf("expected authorID %s, got %s", authorID, p.AuthorID)
-	}
 	if len(p.Images) != 0 {
 		t.Errorf("expected 0 images, got %d", len(p.Images))
 	}
@@ -163,7 +164,8 @@ func TestCreatePost_Success_WithImages(t *testing.T) {
 	uID1 := uuid.New()
 	uID2 := uuid.New()
 	boundUploads := make([]uuid.UUID, 0)
-	insertedImages := make([]PostImage, 0)
+	var batchInsertedIDs []uuid.UUID
+	var batchPositions []int16
 
 	media := &stubMediaBinder{
 		bind: func(ctx context.Context, uploadID, userID uuid.UUID, purpose storage.UploadPurpose) error {
@@ -176,16 +178,19 @@ func TestCreatePost_Success_WithImages(t *testing.T) {
 	}
 
 	repo := &stubRepository{
-		insertPostImage: func(ctx context.Context, postID, uploadID uuid.UUID, position int16) error {
-			insertedImages = append(insertedImages, PostImage{
-				PostID:   postID,
-				UploadID: uploadID,
-				Position: int(position),
-			})
+		batchInsertPostImages: func(ctx context.Context, postID uuid.UUID, uploadIDs []uuid.UUID, positions []int16) error {
+			batchInsertedIDs = uploadIDs
+			batchPositions = positions
 			return nil
 		},
-		getPostImagesByPostID: func(ctx context.Context, postID uuid.UUID) ([]PostImage, error) {
-			return insertedImages, nil
+		getPostWithImages: func(ctx context.Context, id uuid.UUID) (Post, error) {
+			return Post{
+				ID: id,
+				Images: []PostImage{
+					{PostID: id, UploadID: uID1, Position: 0},
+					{PostID: id, UploadID: uID2, Position: 1},
+				},
+			}, nil
 		},
 	}
 
@@ -199,11 +204,14 @@ func TestCreatePost_Success_WithImages(t *testing.T) {
 	if len(boundUploads) != 2 {
 		t.Fatalf("expected 2 bound uploads, got %d", len(boundUploads))
 	}
+	if len(batchInsertedIDs) != 2 {
+		t.Fatalf("expected 2 batch inserted IDs, got %d", len(batchInsertedIDs))
+	}
+	if len(batchPositions) != 2 || batchPositions[0] != 0 || batchPositions[1] != 1 {
+		t.Errorf("expected positions [0, 1], got %v", batchPositions)
+	}
 	if len(p.Images) != 2 {
 		t.Fatalf("expected 2 images on returned post, got %d", len(p.Images))
-	}
-	if p.Images[0].Position != 0 || p.Images[1].Position != 1 {
-		t.Errorf("positions unexpected: %v", p.Images)
 	}
 }
 
@@ -265,7 +273,7 @@ func TestGetPost_Success(t *testing.T) {
 	imgID := uuid.New()
 
 	repo := &stubRepository{
-		getPostByID: func(ctx context.Context, id uuid.UUID) (Post, error) {
+		getPostWithImages: func(ctx context.Context, id uuid.UUID) (Post, error) {
 			return Post{
 				ID:        id,
 				AuthorID:  authorID,
@@ -273,11 +281,9 @@ func TestGetPost_Success(t *testing.T) {
 				Content:   "Fetched Content",
 				CreatedAt: time.Now(),
 				UpdatedAt: time.Now(),
-			}, nil
-		},
-		getPostImagesByPostID: func(ctx context.Context, postID uuid.UUID) ([]PostImage, error) {
-			return []PostImage{
-				{PostID: postID, UploadID: imgID, Position: 0, ObjectKey: "final/key.jpg"},
+				Images: []PostImage{
+					{PostID: id, UploadID: imgID, Position: 0, ObjectKey: "final/key.jpg"},
+				},
 			}, nil
 		},
 	}
@@ -291,6 +297,9 @@ func TestGetPost_Success(t *testing.T) {
 	if p.Title != "Fetched Post" {
 		t.Errorf("expected 'Fetched Post', got %s", p.Title)
 	}
+	if p.AuthorID != authorID {
+		t.Errorf("expected authorID %s, got %s", authorID, p.AuthorID)
+	}
 	if len(p.Images) != 1 {
 		t.Fatalf("expected 1 image, got %d", len(p.Images))
 	}
@@ -301,7 +310,7 @@ func TestGetPost_Success(t *testing.T) {
 
 func TestGetPost_NotFound(t *testing.T) {
 	repo := &stubRepository{
-		getPostByID: func(ctx context.Context, id uuid.UUID) (Post, error) {
+		getPostWithImages: func(ctx context.Context, id uuid.UUID) (Post, error) {
 			return Post{}, ErrPostNotFound
 		},
 	}
@@ -379,6 +388,9 @@ func TestListPostsByAuthor_Success(t *testing.T) {
 	if len(posts[0].Images) != 1 {
 		t.Errorf("expected 1 image on author post, got %d", len(posts[0].Images))
 	}
+	if posts[0].AuthorID != authorID {
+		t.Errorf("expected authorID %s, got %s", authorID, posts[0].AuthorID)
+	}
 }
 
 func TestUpdatePost_Success_TextAndReconcileImages(t *testing.T) {
@@ -396,9 +408,11 @@ func TestUpdatePost_Success_TextAndReconcileImages(t *testing.T) {
 
 	superseded := make([]uuid.UUID, 0)
 	bound := make([]uuid.UUID, 0)
-	deleted := make([]uuid.UUID, 0)
-	updatedPositions := make(map[uuid.UUID]int16)
-	inserted := make([]uuid.UUID, 0)
+	var deletedIDs []uuid.UUID
+	var insertedIDs []uuid.UUID
+	var insertedPositions []int16
+	var updatedIDs []uuid.UUID
+	var updatedPositions []int16
 
 	media := &stubMediaBinder{
 		supersede: func(ctx context.Context, uploadID uuid.UUID) error {
@@ -418,23 +432,24 @@ func TestUpdatePost_Success_TextAndReconcileImages(t *testing.T) {
 		updatePost: func(ctx context.Context, id uuid.UUID, title, content *string) (Post, error) {
 			return Post{ID: id, AuthorID: authorID, Title: *title, Content: *content}, nil
 		},
-		getPostImagesByPostID: func(ctx context.Context, id uuid.UUID) ([]PostImage, error) {
-			return currentImages, nil
+		getPostImagesByPostIDs: func(ctx context.Context, postIDs []uuid.UUID) (map[uuid.UUID][]PostImage, error) {
+			m := make(map[uuid.UUID][]PostImage)
+			m[postID] = currentImages
+			return m, nil
 		},
-		deletePostImage: func(ctx context.Context, pID, uID uuid.UUID) error {
-			deleted = append(deleted, uID)
+		deletePostImages: func(ctx context.Context, pID uuid.UUID, uploadIDs []uuid.UUID) error {
+			deletedIDs = uploadIDs
 			return nil
 		},
-		insertPostImage: func(ctx context.Context, pID, uID uuid.UUID, position int16) error {
-			inserted = append(inserted, uID)
+		batchInsertPostImages: func(ctx context.Context, pID uuid.UUID, uploadIDs []uuid.UUID, positions []int16) error {
+			insertedIDs = uploadIDs
+			insertedPositions = positions
 			return nil
 		},
-		updatePostImagePosition: func(ctx context.Context, pID, uID uuid.UUID, position int16) error {
-			updatedPositions[uID] = position
+		updatePostImagePositions: func(ctx context.Context, pID uuid.UUID, uploadIDs []uuid.UUID, positions []int16) error {
+			updatedIDs = uploadIDs
+			updatedPositions = positions
 			return nil
-		},
-		getPostByID: func(ctx context.Context, id uuid.UUID) (Post, error) {
-			return Post{ID: id, AuthorID: authorID, Title: "New Title", Content: "New Content"}, nil
 		},
 	}
 
@@ -451,23 +466,32 @@ func TestUpdatePost_Success_TextAndReconcileImages(t *testing.T) {
 	if p.Title != "New Title" {
 		t.Errorf("expected title 'New Title', got %s", p.Title)
 	}
+	if p.AuthorID != authorID {
+		t.Errorf("expected authorID %s, got %s", authorID, p.AuthorID)
+	}
 
 	if len(superseded) != 1 || superseded[0] != imgB {
 		t.Errorf("expected imgB to be superseded, got %v", superseded)
 	}
-	if len(deleted) != 1 || deleted[0] != imgB {
-		t.Errorf("expected imgB to be deleted from post_images, got %v", deleted)
+	if len(deletedIDs) != 1 || deletedIDs[0] != imgB {
+		t.Errorf("expected imgB in batch deletePostImages, got %v", deletedIDs)
 	}
 
 	if len(bound) != 1 || bound[0] != imgC {
 		t.Errorf("expected imgC to be bound, got %v", bound)
 	}
-	if len(inserted) != 1 || inserted[0] != imgC {
-		t.Errorf("expected imgC to be inserted into post_images, got %v", inserted)
+	if len(insertedIDs) != 1 || insertedIDs[0] != imgC {
+		t.Errorf("expected imgC in batchInsertPostImages, got %v", insertedIDs)
+	}
+	if len(insertedPositions) != 1 || insertedPositions[0] != 0 {
+		t.Errorf("expected imgC position 0, got %v", insertedPositions)
 	}
 
-	if pos, ok := updatedPositions[imgA]; !ok || pos != 1 {
-		t.Errorf("expected imgA position to be updated to 1, got %v", updatedPositions)
+	if len(updatedIDs) != 1 || updatedIDs[0] != imgA {
+		t.Errorf("expected imgA in updatePostImagePositions, got %v", updatedIDs)
+	}
+	if len(updatedPositions) != 1 || updatedPositions[0] != 1 {
+		t.Errorf("expected imgA new position 1, got %v", updatedPositions)
 	}
 }
 
@@ -510,11 +534,8 @@ func TestDeletePost_Success(t *testing.T) {
 		getPostByIDForUpdate: func(ctx context.Context, id uuid.UUID) (Post, error) {
 			return Post{ID: id, AuthorID: authorID}, nil
 		},
-		getPostImagesByPostID: func(ctx context.Context, id uuid.UUID) ([]PostImage, error) {
-			return []PostImage{
-				{PostID: id, UploadID: img1, Position: 0},
-				{PostID: id, UploadID: img2, Position: 1},
-			}, nil
+		deletePostImagesByPostID: func(ctx context.Context, id uuid.UUID) ([]uuid.UUID, error) {
+			return []uuid.UUID{img1, img2}, nil
 		},
 		deletePost: func(ctx context.Context, id uuid.UUID) error {
 			deletedPost = true

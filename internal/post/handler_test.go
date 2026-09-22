@@ -69,7 +69,7 @@ func (s *stubPostService) DeletePost(ctx context.Context, postID, authorID uuid.
 func setupTestRouter(svc PostService, authMiddleware gin.HandlerFunc) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := NewHandler(svc, logger, "http://cdn.example.com", "http://cdn.example.com/default/avatar.png")
+	h := NewHandler(svc, logger, "http://cdn.example.com")
 
 	r := gin.New()
 	v1 := r.Group("/api/v1")
@@ -88,11 +88,6 @@ func samplePost() Post {
 		Content:   "Sample Content",
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
-		Author: PostAuthor{
-			ID:          authorID,
-			Username:    "artist",
-			DisplayName: "Artist Name",
-		},
 		Images: []PostImage{
 			{
 				PostID:      postID,
@@ -125,6 +120,9 @@ func TestHandler_CreatePost_201(t *testing.T) {
 	resp := testhttp.DecodeResponse[PostResponse](t, w)
 	if resp.Data.Title != expectedPost.Title {
 		t.Errorf("expected title %q, got %q", expectedPost.Title, resp.Data.Title)
+	}
+	if resp.Data.AuthorID != expectedPost.AuthorID.String() {
+		t.Errorf("expected authorID %q, got %q", expectedPost.AuthorID.String(), resp.Data.AuthorID)
 	}
 	if len(resp.Data.Images) != 1 {
 		t.Errorf("expected 1 image, got %d", len(resp.Data.Images))

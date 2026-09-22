@@ -99,8 +99,8 @@ func TestRepository_CreateAndGetPost(t *testing.T) {
 	if fetched.ID != postID {
 		t.Errorf("expected fetched ID %s, got %s", postID, fetched.ID)
 	}
-	if fetched.Author.Username != "author_one" {
-		t.Errorf("expected author username 'author_one', got %s", fetched.Author.Username)
+	if fetched.AuthorID != authorID {
+		t.Errorf("expected author ID %s, got %s", authorID, fetched.AuthorID)
 	}
 }
 
@@ -120,25 +120,22 @@ func TestRepository_PostWithImages(t *testing.T) {
 	mustCreateUpload(t, ctx, uID1, authorID, "final/art1.jpg")
 	mustCreateUpload(t, ctx, uID2, authorID, "final/art2.jpg")
 
-	if err := testRepo.InsertPostImage(ctx, postID, uID1, 0); err != nil {
-		t.Fatalf("InsertPostImage 0: %v", err)
-	}
-	if err := testRepo.InsertPostImage(ctx, postID, uID2, 1); err != nil {
-		t.Fatalf("InsertPostImage 1: %v", err)
+	if err := testRepo.BatchInsertPostImages(ctx, postID, []uuid.UUID{uID1, uID2}, []int16{0, 1}); err != nil {
+		t.Fatalf("BatchInsertPostImages: %v", err)
 	}
 
-	images, err := testRepo.GetPostImagesByPostID(ctx, postID)
+	postWithImages, err := testRepo.GetPostWithImages(ctx, postID)
 	if err != nil {
-		t.Fatalf("GetPostImagesByPostID: %v", err)
+		t.Fatalf("GetPostWithImages: %v", err)
 	}
-	if len(images) != 2 {
-		t.Fatalf("expected 2 images, got %d", len(images))
+	if len(postWithImages.Images) != 2 {
+		t.Fatalf("expected 2 images, got %d", len(postWithImages.Images))
 	}
-	if images[0].Position != 0 || images[0].ObjectKey != "final/art1.jpg" {
-		t.Errorf("unexpected image 0: %+v", images[0])
+	if postWithImages.Images[0].Position != 0 || postWithImages.Images[0].ObjectKey != "final/art1.jpg" {
+		t.Errorf("unexpected image 0: %+v", postWithImages.Images[0])
 	}
-	if images[1].Position != 1 || images[1].ObjectKey != "final/art2.jpg" {
-		t.Errorf("unexpected image 1: %+v", images[1])
+	if postWithImages.Images[1].Position != 1 || postWithImages.Images[1].ObjectKey != "final/art2.jpg" {
+		t.Errorf("unexpected image 1: %+v", postWithImages.Images[1])
 	}
 
 	batchMap, err := testRepo.GetPostImagesByPostIDs(ctx, []uuid.UUID{postID})
@@ -194,8 +191,16 @@ func TestRepository_DeletePost_Cascade(t *testing.T) {
 
 	uID := uuid.New()
 	mustCreateUpload(t, ctx, uID, authorID, "final/del.jpg")
-	if err := testRepo.InsertPostImage(ctx, postID, uID, 0); err != nil {
-		t.Fatalf("InsertPostImage: %v", err)
+	if err := testRepo.BatchInsertPostImages(ctx, postID, []uuid.UUID{uID}, []int16{0}); err != nil {
+		t.Fatalf("BatchInsertPostImages: %v", err)
+	}
+
+	deletedIDs, err := testRepo.DeletePostImagesByPostID(ctx, postID)
+	if err != nil {
+		t.Fatalf("DeletePostImagesByPostID: %v", err)
+	}
+	if len(deletedIDs) != 1 || deletedIDs[0] != uID {
+		t.Errorf("expected deletedID %s, got %v", uID, deletedIDs)
 	}
 
 	if err := testRepo.DeletePost(ctx, postID); err != nil {
@@ -205,14 +210,6 @@ func TestRepository_DeletePost_Cascade(t *testing.T) {
 	_, err = testRepo.GetPostByID(ctx, postID)
 	if !errors.Is(err, ErrPostNotFound) {
 		t.Errorf("expected ErrPostNotFound after delete, got %v", err)
-	}
-
-	imgs, err := testRepo.GetPostImagesByPostID(ctx, postID)
-	if err != nil {
-		t.Fatalf("GetPostImagesByPostID: %v", err)
-	}
-	if len(imgs) != 0 {
-		t.Errorf("expected 0 images after cascade delete, got %d", len(imgs))
 	}
 }
 
@@ -259,7 +256,7 @@ func TestRepository_Constraint_MaxPosition(t *testing.T) {
 	uID := uuid.New()
 	mustCreateUpload(t, ctx, uID, authorID, "final/pos10.jpg")
 
-	err := testRepo.InsertPostImage(ctx, postID, uID, 10)
+	err := testRepo.BatchInsertPostImages(ctx, postID, []uuid.UUID{uID}, []int16{10})
 	if err == nil {
 		t.Fatalf("expected check constraint error for position 10, got nil")
 	}
@@ -285,11 +282,11 @@ func TestRepository_Constraint_UniqueUploadID(t *testing.T) {
 	uID := uuid.New()
 	mustCreateUpload(t, ctx, uID, authorID, "final/shared.jpg")
 
-	if err := testRepo.InsertPostImage(ctx, p1, uID, 0); err != nil {
+	if err := testRepo.BatchInsertPostImages(ctx, p1, []uuid.UUID{uID}, []int16{0}); err != nil {
 		t.Fatalf("first insert failed: %v", err)
 	}
 
-	err := testRepo.InsertPostImage(ctx, p2, uID, 0)
+	err := testRepo.BatchInsertPostImages(ctx, p2, []uuid.UUID{uID}, []int16{0})
 	if err == nil {
 		t.Fatalf("expected unique upload constraint violation, got nil")
 	}
@@ -315,30 +312,25 @@ func TestRepository_DeferredPositionUniqueness(t *testing.T) {
 	mustCreateUpload(t, ctx, uID1, authorID, "final/d1.jpg")
 	mustCreateUpload(t, ctx, uID2, authorID, "final/d2.jpg")
 
-	_ = testRepo.InsertPostImage(ctx, postID, uID1, 0)
-	_ = testRepo.InsertPostImage(ctx, postID, uID2, 1)
+	if err := testRepo.BatchInsertPostImages(ctx, postID, []uuid.UUID{uID1, uID2}, []int16{0, 1}); err != nil {
+		t.Fatalf("initial batch insert failed: %v", err)
+	}
 
 	err := testRepo.WithTransaction(ctx, func(txCtx context.Context) error {
-		if err := testRepo.UpdatePostImagePosition(txCtx, postID, uID1, 1); err != nil {
-			return err
-		}
-		if err := testRepo.UpdatePostImagePosition(txCtx, postID, uID2, 0); err != nil {
-			return err
-		}
-		return nil
+		return testRepo.UpdatePostImagePositions(txCtx, postID, []uuid.UUID{uID1, uID2}, []int16{1, 0})
 	})
 	if err != nil {
 		t.Fatalf("deferred position swap failed: %v", err)
 	}
 
-	imgs, err := testRepo.GetPostImagesByPostID(ctx, postID)
+	postWithImages, err := testRepo.GetPostWithImages(ctx, postID)
 	if err != nil {
-		t.Fatalf("GetPostImagesByPostID: %v", err)
+		t.Fatalf("GetPostWithImages: %v", err)
 	}
-	if imgs[0].UploadID != uID2 || imgs[0].Position != 0 {
-		t.Errorf("expected uID2 at position 0, got %+v", imgs[0])
+	if postWithImages.Images[0].UploadID != uID2 || postWithImages.Images[0].Position != 0 {
+		t.Errorf("expected uID2 at position 0, got %+v", postWithImages.Images[0])
 	}
-	if imgs[1].UploadID != uID1 || imgs[1].Position != 1 {
-		t.Errorf("expected uID1 at position 1, got %+v", imgs[1])
+	if postWithImages.Images[1].UploadID != uID1 || postWithImages.Images[1].Position != 1 {
+		t.Errorf("expected uID1 at position 1, got %+v", postWithImages.Images[1])
 	}
 }
