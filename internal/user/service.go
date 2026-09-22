@@ -15,6 +15,7 @@ type MediaBinder interface {
 type Repository interface {
 	FindByUsername(ctx context.Context, username string) (User, error)
 	FindByID(ctx context.Context, id uuid.UUID) (User, error)
+	FindPublicProfilesByIDs(ctx context.Context, ids []uuid.UUID) ([]UserSummary, error)
 	UpdateProfile(ctx context.Context, id uuid.UUID, displayName, bio *string) (User, error)
 	UpdateAvatar(ctx context.Context, userID, uploadID uuid.UUID) error
 	DeleteAvatar(ctx context.Context, userID uuid.UUID) error
@@ -40,6 +41,22 @@ func (s *service) GetPublicProfile(ctx context.Context, username string) (User, 
 
 func (s *service) GetMyProfile(ctx context.Context, userID uuid.UUID) (User, error) {
 	return s.repo.FindByID(ctx, userID)
+}
+
+func (s *service) GetPublicProfilesByIDs(ctx context.Context, rawIDs []string) ([]UserSummary, error) {
+	seen := make(map[uuid.UUID]struct{}, len(rawIDs))
+	ids := make([]uuid.UUID, 0, len(rawIDs))
+	for _, raw := range rawIDs {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			continue
+		}
+		if _, exists := seen[id]; !exists {
+			seen[id] = struct{}{}
+			ids = append(ids, id)
+		}
+	}
+	return s.repo.FindPublicProfilesByIDs(ctx, ids)
 }
 
 func (s *service) UpdateProfile(ctx context.Context, userID uuid.UUID, displayName, bio *string) (User, error) {

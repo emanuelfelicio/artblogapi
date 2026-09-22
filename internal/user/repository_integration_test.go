@@ -331,3 +331,117 @@ func TestRepository_WithTransaction(t *testing.T) {
 		}
 	})
 }
+
+func TestRepository_FindPublicProfilesByIDs(t *testing.T) {
+	t.Run("returns public profiles for active users with bound avatars", func(t *testing.T) {
+		ctx := setup(t)
+		u1 := newTestUser()
+		mustCreateUser(t, ctx, u1)
+		avatarID := uuid.New()
+		mustCreateUploadWithPurpose(t, ctx, avatarID, u1.ID, "avatars/u1.png", "BOUND", "AVATAR")
+		_, err := testDBPool.Exec(ctx, `UPDATE users SET avatar_upload_id = $1 WHERE id = $2`, avatarID, u1.ID)
+		if err != nil {
+			t.Fatalf("failed to attach avatar: %v", err)
+		}
+
+		u2 := newTestUser()
+		mustCreateUser(t, ctx, u2)
+
+		results, err := testRepo.FindPublicProfilesByIDs(ctx, []uuid.UUID{u1.ID, u2.ID})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(results) != 2 {
+			t.Fatalf("expected 2 results, got %d", len(results))
+		}
+
+		resMap := make(map[uuid.UUID]UserSummary, len(results))
+		for _, r := range results {
+			resMap[r.ID] = r
+		}
+
+		summary1, ok := resMap[u1.ID]
+		if !ok {
+			t.Fatalf("expected user 1 in results")
+		}
+		if summary1.Username != u1.Username || summary1.DisplayName != u1.DisplayName {
+			t.Errorf("unexpected user 1 data: %+v", summary1)
+		}
+		if summary1.AvatarKey == nil || *summary1.AvatarKey != "avatars/u1.png" {
+			t.Errorf("expected avatar key 'avatars/u1.png', got %v", summary1.AvatarKey)
+		}
+
+		summary2, ok := resMap[u2.ID]
+		if !ok {
+			t.Fatalf("expected user 2 in results")
+		}
+		if summary2.AvatarKey != nil {
+			t.Errorf("expected nil avatar key for user 2, got %v", summary2.AvatarKey)
+		}
+	})
+
+	t.Run("filters out inactive users", func(t *testing.T) {
+		ctx := setup(t)
+		inactiveUser := newTestUser()
+		inactiveUser.IsActive = false
+		mustCreateUser(t, ctx, inactiveUser)
+
+		activeUser := newTestUser()
+		mustCreateUser(t, ctx, activeUser)
+
+		results, err := testRepo.FindPublicProfilesByIDs(ctx, []uuid.UUID{inactiveUser.ID, activeUser.ID})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(results) != 1 {
+			t.Fatalf("expected 1 result, got %d", len(results))
+		}
+		if results[0].ID != activeUser.ID {
+			t.Errorf("expected active user %s, got %s", activeUser.ID, results[0].ID)
+		}
+	})
+
+	t.Run("does not return avatar key if upload is not BOUND", func(t *testing.T) {
+		ctx := setup(t)
+		u := newTestUser()
+		mustCreateUser(t, ctx, u)
+
+		uploadID := uuid.New()
+		mustCreateUploadWithPurpose(t, ctx, uploadID, u.ID, "avatars/unbound.png", "COMPLETED", "AVATAR")
+		_, err := testDBPool.Exec(ctx, `UPDATE users SET avatar_upload_id = $1 WHERE id = $2`, uploadID, u.ID)
+		if err != nil {
+			t.Fatalf("failed to attach avatar: %v", err)
+		}
+
+		results, err := testRepo.FindPublicProfilesByIDs(ctx, []uuid.UUID{u.ID})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(results) != 1 {
+			t.Fatalf("expected 1 result, got %d", len(results))
+		}
+		if results[0].AvatarKey != nil {
+			t.Errorf("expected nil avatar key for non-BOUND upload, got %v", results[0].AvatarKey)
+		}
+	})
+
+	t.Run("returns empty slice when no IDs match or empty slice passed", func(t *testing.T) {
+		ctx := setup(t)
+
+		results, err := testRepo.FindPublicProfilesByIDs(ctx, []uuid.UUID{uuid.New()})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(results) != 0 {
+			t.Errorf("expected empty slice, got %d items", len(results))
+		}
+
+		resultsEmpty, err := testRepo.FindPublicProfilesByIDs(ctx, []uuid.UUID{})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(resultsEmpty) != 0 {
+			t.Errorf("expected empty slice, got %d items", len(resultsEmpty))
+		}
+	})
+}
