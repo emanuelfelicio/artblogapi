@@ -52,18 +52,6 @@ func (r *repository) CreatePost(ctx context.Context, id, authorID uuid.UUID, tit
 	return mapPost(row), nil
 }
 
-func (r *repository) GetPostByID(ctx context.Context, id uuid.UUID) (Post, error) {
-	row, err := r.q(ctx).GetPostByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return Post{}, ErrPostNotFound
-		}
-		return Post{}, fmt.Errorf("get_post_by_id: %w", err)
-	}
-
-	return mapPost(row), nil
-}
-
 func (r *repository) GetPostByIDForUpdate(ctx context.Context, id uuid.UUID) (Post, error) {
 	row, err := r.q(ctx).GetPostByIDForUpdate(ctx, id)
 	if err != nil {

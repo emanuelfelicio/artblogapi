@@ -91,9 +91,9 @@ func TestRepository_CreateAndGetPost(t *testing.T) {
 		t.Errorf("expected Title 'Title 1', got %s", created.Title)
 	}
 
-	fetched, err := testRepo.GetPostByID(ctx, postID)
+	fetched, err := testRepo.GetPostWithImages(ctx, postID)
 	if err != nil {
-		t.Fatalf("GetPostByID: %v", err)
+		t.Fatalf("GetPostWithImages: %v", err)
 	}
 
 	if fetched.ID != postID {
@@ -207,7 +207,7 @@ func TestRepository_DeletePost_Cascade(t *testing.T) {
 		t.Fatalf("DeletePost: %v", err)
 	}
 
-	_, err = testRepo.GetPostByID(ctx, postID)
+	_, err = testRepo.GetPostWithImages(ctx, postID)
 	if !errors.Is(err, ErrPostNotFound) {
 		t.Errorf("expected ErrPostNotFound after delete, got %v", err)
 	}
