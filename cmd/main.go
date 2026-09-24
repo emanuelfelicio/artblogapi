@@ -10,10 +10,10 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/emanuelfelicio/artblogapi/cmd/docs"
 	"github.com/emanuelfelicio/artblogapi/config"
 	loggercfg "github.com/emanuelfelicio/artblogapi/config/logger"
 	"github.com/emanuelfelicio/artblogapi/db/dbgen"
+	_ "github.com/emanuelfelicio/artblogapi/docs/swagger"
 	"github.com/emanuelfelicio/artblogapi/internal/auth"
 	"github.com/emanuelfelicio/artblogapi/internal/auth/token"
 	"github.com/emanuelfelicio/artblogapi/internal/middleware"

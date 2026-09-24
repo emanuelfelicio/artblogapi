@@ -64,7 +64,7 @@ test/cover:
 
 .PHONY: swag/init
 swag/init:
-	go tool swag init -g ./cmd/main.go -o ./cmd/docs --pd --st -q
+	go tool swag init -g ./cmd/main.go -o ./docs/swagger --pd --st -q
 
 .PHONY: swag/fmt
 swag/fmt:
