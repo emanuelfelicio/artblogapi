@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/emanuelfelicio/artblogapi/internal/storage"
 	"io"
 	"strings"
 	"time"
+
+	"github.com/emanuelfelicio/artblogapi/internal/storage"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
@@ -63,11 +64,12 @@ func InitS3Client(ctx context.Context, endpoint, region, accessKey, secretKey st
 	return client, nil
 }
 
-func (s *S3StorageProvider) GenerateUploadURL(ctx context.Context, key string, contentType storage.ImageContentType, expires time.Duration) (string, error) {
+func (s *S3StorageProvider) GenerateUploadURL(ctx context.Context, key string, contentType storage.ImageContentType, expires time.Duration, fileSize int) (string, error) {
 	req, err := s.presignClient.PresignPutObject(ctx, &s3.PutObjectInput{
-		Bucket:      aws.String(s.bucket),
-		Key:         aws.String(key),
-		ContentType: aws.String(string(contentType)),
+		Bucket:        aws.String(s.bucket),
+		Key:           aws.String(key),
+		ContentType:   aws.String(string(contentType)),
+		ContentLength: aws.Int64(int64(fileSize)),
 	}, s3.WithPresignExpires(expires))
 	if err != nil {
 		return "", fmt.Errorf("presign_put_object: %w", err)

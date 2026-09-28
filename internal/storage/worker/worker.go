@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"sync"
 	"time"
@@ -33,9 +34,16 @@ type Repository interface {
 	IncrementRetry(ctx context.Context, id uuid.UUID, backoff time.Duration) error
 }
 
+type StorageProvider interface {
+	GetObject(ctx context.Context, key string) (io.ReadCloser, error)
+	PutObject(ctx context.Context, key string, reader io.Reader, contentType string) error
+	DeleteObject(ctx context.Context, key string) error
+	ObjectExists(ctx context.Context, key string) (bool, error)
+}
+
 type Worker struct {
 	repo        Repository
-	provider    storage.StorageProvider
+	provider    StorageProvider
 	processor   image.ImageProcessor
 	triggerChan chan struct{}
 	cfg         Config
@@ -45,7 +53,7 @@ type Worker struct {
 
 func New(
 	repo Repository,
-	provider storage.StorageProvider,
+	provider StorageProvider,
 	processor image.ImageProcessor,
 	triggerChan chan struct{},
 	cfg Config,

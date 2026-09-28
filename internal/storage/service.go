@@ -35,7 +35,7 @@ func (s *Service) InitUpload(ctx context.Context, userID uuid.UUID, purpose Uplo
 		return uuid.Nil, "", err
 	}
 
-	presignedURL, err := s.provider.GenerateUploadURL(ctx, upload.ObjectKey, upload.ContentType, s.presignTTL)
+	presignedURL, err := s.provider.GenerateUploadURL(ctx, upload.ObjectKey, upload.ContentType, s.presignTTL, upload.FileSize)
 	if err != nil {
 		return uuid.Nil, "", fmt.Errorf("generate_upload_url: %w", err)
 	}

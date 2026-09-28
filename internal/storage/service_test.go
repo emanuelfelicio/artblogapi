@@ -57,13 +57,13 @@ func (s *stubRepository) UpdateUploadStatus(ctx context.Context, id uuid.UUID, s
 }
 
 type stubStorageProvider struct {
-	generateUploadURL func(ctx context.Context, key string, contentType ImageContentType, expires time.Duration) (string, error)
+	generateUploadURL func(ctx context.Context, key string, contentType ImageContentType, expires time.Duration, fileSize int) (string, error)
 	objectExists      func(ctx context.Context, key string) (bool, error)
 }
 
-func (s *stubStorageProvider) GenerateUploadURL(ctx context.Context, key string, contentType ImageContentType, expires time.Duration) (string, error) {
+func (s *stubStorageProvider) GenerateUploadURL(ctx context.Context, key string, contentType ImageContentType, expires time.Duration, fileSize int) (string, error) {
 	if s.generateUploadURL != nil {
-		return s.generateUploadURL(ctx, key, contentType, expires)
+		return s.generateUploadURL(ctx, key, contentType, expires, fileSize)
 	}
 	return "https://s3.example.com/presigned", nil
 }
@@ -246,7 +246,7 @@ func TestService_InitUpload(t *testing.T) {
 			contentType: "image/png",
 			repo:        &stubRepository{},
 			provider: &stubStorageProvider{
-				generateUploadURL: func(_ context.Context, _ string, _ ImageContentType, _ time.Duration) (string, error) {
+				generateUploadURL: func(_ context.Context, _ string, _ ImageContentType, _ time.Duration, _ int) (string, error) {
 					return "", errors.New("s3 unavailable")
 				},
 			},
@@ -374,7 +374,7 @@ func TestService_InitUpload_UploadFieldsSpy(t *testing.T) {
 func TestService_InitUpload_PresignTTLSpy(t *testing.T) {
 	var capturedTTL time.Duration
 	provider := &stubStorageProvider{
-		generateUploadURL: func(_ context.Context, _ string, _ ImageContentType, expires time.Duration) (string, error) {
+		generateUploadURL: func(_ context.Context, _ string, _ ImageContentType, expires time.Duration, _ int) (string, error) {
 			capturedTTL = expires
 			return "https://s3.example.com/presigned", nil
 		},

@@ -83,7 +83,7 @@ func TestS3StorageProvider_GenerateUploadURL(t *testing.T) {
 	}
 
 	provider := NewS3StorageProvider(&mockS3Client{}, presigner, bucket)
-	url, err := provider.GenerateUploadURL(context.Background(), key, storage.ContentTypePNG, 15*time.Minute)
+	url, err := provider.GenerateUploadURL(context.Background(), key, storage.ContentTypePNG, 15*time.Minute, 1024)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -102,7 +102,7 @@ func TestS3StorageProvider_GenerateUploadURL_Error(t *testing.T) {
 	}
 
 	provider := NewS3StorageProvider(&mockS3Client{}, presigner, "bucket")
-	_, err := provider.GenerateUploadURL(context.Background(), "key", storage.ContentTypePNG, 15*time.Minute)
+	_, err := provider.GenerateUploadURL(context.Background(), "key", storage.ContentTypePNG, 15*time.Minute, 1024)
 
 	if err == nil {
 		t.Fatal("expected error, got nil")
