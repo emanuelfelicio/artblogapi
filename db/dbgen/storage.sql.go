@@ -223,6 +223,21 @@ func (q *Queries) RejectUpload(ctx context.Context, arg RejectUploadParams) erro
 	return err
 }
 
+const setUploadProcessing = `-- name: SetUploadProcessing :one
+UPDATE uploads
+SET status = 'PROCESSING', updated_at = now()
+WHERE id = $1
+  AND status = 'PENDING'
+RETURNING id
+`
+
+func (q *Queries) SetUploadProcessing(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, setUploadProcessing, id)
+	var id_2 uuid.UUID
+	err := row.Scan(&id_2)
+	return id_2, err
+}
+
 const updateUploadCompletion = `-- name: UpdateUploadCompletion :exec
 UPDATE uploads
 SET object_key   = $2,

@@ -80,15 +80,14 @@ func (r *repository) GetByID(ctx context.Context, id uuid.UUID) (Upload, error) 
 	if row.UpdatedAt.Valid {
 		upload.UpdatedAt = row.UpdatedAt.Time
 	}
-
 	return upload, nil
 }
 
 func (r *repository) SetStatusProcessing(ctx context.Context, id uuid.UUID) error {
-	err := r.q.UpdateUploadStatus(ctx, dbgen.UpdateUploadStatusParams{
-		ID:     id,
-		Status: dbgen.UploadStatusPROCESSING,
-	})
+	_, err := r.q.SetUploadProcessing(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrUploadNotPending
+	}
 	if err != nil {
 		return fmt.Errorf("set_status_processing: %w", err)
 	}

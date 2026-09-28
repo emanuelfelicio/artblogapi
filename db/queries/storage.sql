@@ -13,6 +13,13 @@ UPDATE uploads
 SET status = $2, updated_at = now()
 WHERE id = $1;
 
+-- name: SetUploadProcessing :one
+UPDATE uploads
+SET status = 'PROCESSING', updated_at = now()
+WHERE id = $1
+  AND status = 'PENDING'
+RETURNING id;
+
 -- name: UpdateUploadObjectKeyAndStatus :exec
 UPDATE uploads
 SET object_key = $2, status = $3, updated_at = now()
@@ -76,4 +83,3 @@ SET object_key   = $2,
     heartbeat_at = NULL,
     updated_at   = now()
 WHERE id = $1;
-
