@@ -21,6 +21,7 @@ const (
 	BannerHeight       = 400
 	PostMaxDimension   = 2048
 	DefaultJPEGQuality = 85
+	MaxImageDimension  = 4096
 )
 
 type ImagingProcessor struct{}
@@ -30,7 +31,31 @@ func NewImagingProcessor() *ImagingProcessor {
 }
 
 func (p *ImagingProcessor) Process(ctx context.Context, r io.Reader, purpose storage.UploadPurpose) (ProcessedImage, error) {
-	img, err := imaging.Decode(r, imaging.AutoOrientation(true))
+	if !purpose.Valid() {
+		return ProcessedImage{}, ErrInvalidPurpose
+	}
+
+	input, err := io.ReadAll(io.LimitReader(r, int64(purpose.MaxFileSize())+1))
+	if err != nil {
+		return ProcessedImage{}, fmt.Errorf("%w: %v", ErrReadImage, err)
+	}
+	if len(input) > purpose.MaxFileSize() {
+		return ProcessedImage{}, ErrImageTooLarge
+	}
+
+	config, _, err := image.DecodeConfig(bytes.NewReader(input))
+	if err != nil {
+		if errors.Is(err, image.ErrFormat) || errors.Is(err, imaging.ErrUnsupportedFormat) {
+			return ProcessedImage{}, ErrUnsupportedFormat
+		}
+		return ProcessedImage{}, fmt.Errorf("%w: %v", ErrDecodeImage, err)
+	}
+	if config.Width <= 0 || config.Height <= 0 ||
+		config.Width > MaxImageDimension || config.Height > MaxImageDimension {
+		return ProcessedImage{}, ErrImageDimensions
+	}
+
+	img, err := imaging.Decode(bytes.NewReader(input), imaging.AutoOrientation(true))
 	if err != nil {
 		if errors.Is(err, image.ErrFormat) || errors.Is(err, imaging.ErrUnsupportedFormat) {
 			return ProcessedImage{}, ErrUnsupportedFormat
@@ -51,8 +76,6 @@ func (p *ImagingProcessor) Process(ctx context.Context, r io.Reader, purpose sto
 		} else {
 			processedImg = img
 		}
-	default:
-		return ProcessedImage{}, ErrInvalidPurpose
 	}
 
 	var buf bytes.Buffer

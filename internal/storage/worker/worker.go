@@ -250,7 +250,7 @@ func (w *Worker) runPipeline(ctx context.Context, job storage.Upload) error {
 }
 
 func (w *Worker) handleJobError(ctx context.Context, job storage.Upload, err error) error {
-	if errors.Is(err, ErrFileNotFound) {
+	if errors.Is(err, ErrFileNotFound) || isPermanentImageError(err) {
 		return w.repo.RejectUpload(ctx, job.ID, err.Error())
 	}
 	if job.RetryCount+1 >= w.cfg.MaxRetries {
@@ -271,4 +271,13 @@ func (w *Worker) handleJobError(ctx context.Context, job storage.Upload, err err
 	)
 
 	return w.repo.IncrementRetry(ctx, job.ID, backoff)
+}
+
+func isPermanentImageError(err error) bool {
+	return errors.Is(err, image.ErrUnsupportedFormat) ||
+		errors.Is(err, image.ErrDecodeImage) ||
+		errors.Is(err, image.ErrEncodeImage) ||
+		errors.Is(err, image.ErrInvalidPurpose) ||
+		errors.Is(err, image.ErrImageTooLarge) ||
+		errors.Is(err, image.ErrImageDimensions)
 }

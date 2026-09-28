@@ -143,4 +143,26 @@ func TestImagingProcessor_Process(t *testing.T) {
 			t.Errorf("expected ErrInvalidPurpose, got %v", err)
 		}
 	})
+
+	t.Run("rejects dimensions above the maximum before decoding", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			purpose storage.UploadPurpose
+			width   int
+			height  int
+		}{
+			{name: "width", purpose: storage.PurposeAVATAR, width: imgproc.MaxImageDimension + 1, height: 100},
+			{name: "height", purpose: storage.PurposePOSTIMAGE, width: 100, height: imgproc.MaxImageDimension + 1},
+		}
+
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				inputBytes := createOpaqueJPEG(tc.width, tc.height, t)
+				_, err := proc.Process(ctx, bytes.NewReader(inputBytes), tc.purpose)
+				if !errors.Is(err, imgproc.ErrImageDimensions) {
+					t.Fatalf("expected ErrImageDimensions, got %v", err)
+				}
+			})
+		}
+	})
 }

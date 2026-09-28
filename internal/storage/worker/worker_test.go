@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"strings"
@@ -699,6 +700,45 @@ func TestWorker_HandleJobError(t *testing.T) {
 		}
 		if rejectedReason != ErrFileNotFound.Error() {
 			t.Errorf("expected reason %q, got %q", ErrFileNotFound.Error(), rejectedReason)
+		}
+	})
+
+	t.Run("rejects permanent image errors without retry", func(t *testing.T) {
+		permanentErrors := []error{
+			image.ErrUnsupportedFormat,
+			image.ErrDecodeImage,
+			image.ErrEncodeImage,
+			image.ErrInvalidPurpose,
+			image.ErrImageTooLarge,
+			image.ErrImageDimensions,
+		}
+
+		for _, permanentErr := range permanentErrors {
+			t.Run(permanentErr.Error(), func(t *testing.T) {
+				rejected := false
+				retried := false
+				repo := &stubRepository{
+					rejectUpload: func(_ context.Context, _ uuid.UUID, reason string) error {
+						rejected = strings.Contains(reason, permanentErr.Error())
+						return nil
+					},
+					incrementRetry: func(_ context.Context, _ uuid.UUID, _ time.Duration) error {
+						retried = true
+						return nil
+					},
+				}
+
+				w := New(repo, &stubStorageProvider{}, &stubImageProcessor{}, make(chan struct{}, 1), Config{MaxRetries: 3}, newTestLogger())
+				if err := w.handleJobError(context.Background(), job, fmt.Errorf("process_image: %w", permanentErr)); err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if !rejected {
+					t.Errorf("expected upload rejection for %v", permanentErr)
+				}
+				if retried {
+					t.Errorf("did not expect retry for %v", permanentErr)
+				}
+			})
 		}
 	})
 
