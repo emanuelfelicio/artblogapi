@@ -227,8 +227,9 @@ partir desse conteúdo.
 - endpoints protegidos validam o usuário autenticado;
 - uploads validam finalidade, tipo declarado e tamanho máximo por finalidade;
 - URLs pré-assinadas incluem tipo e tamanho esperados;
-- o worker decodifica a imagem e limita as dimensões da imagem processada na
-  saída, usa retry,
+- o worker valida dimensões e pixels da imagem de entrada de acordo com a
+  finalidade antes da decodificação completa, limita as dimensões da imagem
+  processada na saída e usa retry,
   heartbeat, recuperação de jobs obsoletos e processamento idempotente;
 - vínculos de mídia verificam propriedade, finalidade, estado e uso único;
 - posts limitam título, quantidade de imagens e paginação;
