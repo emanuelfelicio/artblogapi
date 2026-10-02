@@ -3,14 +3,13 @@ package middleware
 import (
 	"fmt"
 	"math"
-	"net"
 	"net/http"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/emanuelfelicio/artblogapi/config/response"
+	"github.com/emanuelfelicio/artblogapi/internal/middleware/requestcontext"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/time/rate"
 )
@@ -72,9 +71,17 @@ func NewRateLimiter(policy RateLimitPolicy) (*RateLimiter, error) {
 	}, nil
 }
 
-func (l *RateLimiter) Middleware(clientIP func(*http.Request) string) gin.HandlerFunc {
+func (l *RateLimiter) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		key := clientIP(c.Request)
+		key, ok := requestcontext.ClientIP(c.Request.Context())
+		if !ok {
+			err := fmt.Errorf("client IP missing from request context")
+			response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "internal server error")
+			c.Error(err)
+			c.Abort()
+			return
+		}
+
 		if !l.allow(key) {
 			c.Header("Retry-After", strconv.Itoa(l.retryAfter))
 			response.Fail(c, http.StatusTooManyRequests, response.RateLimitedCode, "rate limit exceeded")
@@ -115,79 +122,4 @@ func (l *RateLimiter) cleanupLocked(now time.Time) {
 		}
 	}
 	l.lastCleanup = now
-}
-
-func ClientIP(trustedProxyCIDRs []string) (func(*http.Request) string, error) {
-	trustedProxies, err := parseTrustedProxyCIDRs(trustedProxyCIDRs)
-	if err != nil {
-		return nil, err
-	}
-
-	return func(request *http.Request) string {
-		remoteIP := remoteIP(request.RemoteAddr)
-		if len(trustedProxies) == 0 || remoteIP == nil || !containsIP(trustedProxies, remoteIP) {
-			return remoteIPString(remoteIP, request.RemoteAddr)
-		}
-
-		if forwardedIP := forwardedClientIP(request, trustedProxies); forwardedIP != nil {
-			return forwardedIP.String()
-		}
-		return remoteIPString(remoteIP, request.RemoteAddr)
-	}, nil
-}
-
-func parseTrustedProxyCIDRs(cidrs []string) ([]*net.IPNet, error) {
-	proxies := make([]*net.IPNet, 0, len(cidrs))
-	for _, cidr := range cidrs {
-		_, network, err := net.ParseCIDR(cidr)
-		if err != nil {
-			return nil, fmt.Errorf("invalid trusted proxy CIDR %q: %w", cidr, err)
-		}
-		proxies = append(proxies, network)
-	}
-	return proxies, nil
-}
-
-func forwardedClientIP(request *http.Request, trustedProxies []*net.IPNet) net.IP {
-	var candidates []net.IP
-	for value := range strings.SplitSeq(request.Header.Get("X-Forwarded-For"), ",") {
-		if ip := net.ParseIP(strings.TrimSpace(value)); ip != nil {
-			candidates = append(candidates, ip)
-		}
-	}
-
-	for index := len(candidates) - 1; index >= 0; index-- {
-		if !containsIP(trustedProxies, candidates[index]) {
-			return candidates[index]
-		}
-	}
-
-	if realIP := net.ParseIP(strings.TrimSpace(request.Header.Get("X-Real-IP"))); realIP != nil {
-		return realIP
-	}
-	return nil
-}
-
-func remoteIP(address string) net.IP {
-	host, _, err := net.SplitHostPort(address)
-	if err == nil {
-		return net.ParseIP(host)
-	}
-	return net.ParseIP(address)
-}
-
-func remoteIPString(ip net.IP, fallback string) string {
-	if ip != nil {
-		return ip.String()
-	}
-	return fallback
-}
-
-func containsIP(networks []*net.IPNet, ip net.IP) bool {
-	for _, network := range networks {
-		if network.Contains(ip) {
-			return true
-		}
-	}
-	return false
 }

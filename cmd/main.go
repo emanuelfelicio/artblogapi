@@ -142,14 +142,15 @@ func main() {
 
 	router := gin.New()
 	router.Use(gin.Recovery())
+	clientIPMiddleware, err := middleware.ClientIPMiddleware(cfg.RateLimitTrustedProxies)
+	if err != nil {
+		logger.Error("client_ip_config_invalid", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	router.Use(clientIPMiddleware)
 	router.Use(middleware.RequestLogger(logger))
 
 	authMiddleware := middleware.Authentication(authTokenProvider)
-	clientIP, err := middleware.ClientIP(cfg.RateLimitTrustedProxies)
-	if err != nil {
-		logger.Error("rate_limit_config_invalid", slog.String("error", err.Error()))
-		os.Exit(1)
-	}
 	v1 := router.Group("/api/v1")
 	var authRateLimitMiddleware gin.HandlerFunc
 	if cfg.RateLimitEnabled {
@@ -169,8 +170,8 @@ func main() {
 			logger.Error("rate_limit_init_failed", slog.String("policy", "auth"), slog.String("error", err.Error()))
 			os.Exit(1)
 		}
-		v1.Use(globalLimiter.Middleware(clientIP))
-		authRateLimitMiddleware = authLimiter.Middleware(clientIP)
+		v1.Use(globalLimiter.Middleware())
+		authRateLimitMiddleware = authLimiter.Middleware()
 	}
 	{
 		auth.Routes(v1, authHandler, authMiddleware, authRateLimitMiddleware)

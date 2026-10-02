@@ -208,7 +208,10 @@ tempo de espera estimado em segundos.
 
 A identificação do IP do cliente valida proxies reversos contra uma lista de CIDRs
 configurados (`RATE_LIMIT_TRUSTED_PROXIES`), ignorando cabeçalhos de encaminhamento
-vindos de fontes não confiáveis.
+vindos de fontes não confiáveis. O IP é resolvido uma única vez pelo middleware
+global de captura de IP e propagado pelo `context.Context` da requisição; o rate
+limiter e os handlers de autenticação consultam esse valor compartilhado, sem
+interpretar `RemoteAddr` ou headers de proxy individualmente.
 
 ### Logging e erros
 

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/emanuelfelicio/artblogapi/internal/middleware/requestcontext"
 	"github.com/emanuelfelicio/artblogapi/internal/testutil/testhttp"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -62,6 +63,11 @@ func setupTestHandler(t *testing.T, s AuthService) *gin.Engine {
 	h := NewHandler(s, logger, cookieConfig)
 
 	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		ctx := requestcontext.WithClientIP(c.Request.Context(), "192.0.2.10")
+		c.Request = c.Request.WithContext(ctx)
+		c.Next()
+	})
 	// Minimal routes for testing
 	r.POST("/register", h.Register)
 	r.POST("/login", h.Login)

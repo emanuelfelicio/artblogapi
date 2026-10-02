@@ -11,6 +11,7 @@ import (
 
 	"github.com/emanuelfelicio/artblogapi/config/response"
 	"github.com/emanuelfelicio/artblogapi/internal/middleware"
+	"github.com/emanuelfelicio/artblogapi/internal/middleware/requestcontext"
 	"github.com/gin-gonic/gin"
 )
 
@@ -24,7 +25,8 @@ func TestRateLimiterMiddleware(t *testing.T) {
 	}
 
 	r := gin.New()
-	r.GET("/", limiter.Middleware(func(_ *http.Request) string { return "client" }), func(c *gin.Context) {
+	r.Use(clientIPForTest("client"))
+	r.GET("/", limiter.Middleware(), func(c *gin.Context) {
 		c.Status(http.StatusNoContent)
 	})
 
@@ -65,7 +67,8 @@ func TestRateLimiterRetryAfterDefault(t *testing.T) {
 	}
 
 	r := gin.New()
-	r.GET("/", limiter.Middleware(func(_ *http.Request) string { return "client" }), func(c *gin.Context) {
+	r.Use(clientIPForTest("client"))
+	r.GET("/", limiter.Middleware(), func(c *gin.Context) {
 		c.Status(http.StatusNoContent)
 	})
 
@@ -86,6 +89,59 @@ func TestRateLimiterRetryAfterDefault(t *testing.T) {
 	}
 	if got := resp.Header().Get("Retry-After"); got != "1" {
 		t.Fatalf("Retry-After = %q, want %q", got, "1")
+	}
+}
+
+func TestRateLimiterMiddlewareRequiresClientIPContext(t *testing.T) {
+	limiter, err := middleware.NewRateLimiter(middleware.RateLimitPolicy{
+		Limit:  1,
+		Window: time.Minute,
+	})
+	if err != nil {
+		t.Fatalf("NewRateLimiter() error = %v", err)
+	}
+
+	r := gin.New()
+	r.GET("/", limiter.Middleware(), func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
+	})
+
+	resp := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", resp.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestClientIPMiddlewareStoresResolvedIPInRequestContext(t *testing.T) {
+	clientIPMiddleware, err := middleware.ClientIPMiddleware([]string{"10.0.0.0/8"})
+	if err != nil {
+		t.Fatalf("ClientIPMiddleware() error = %v", err)
+	}
+
+	r := gin.New()
+	r.Use(clientIPMiddleware)
+	r.GET("/", func(c *gin.Context) {
+		ip, ok := requestcontext.ClientIP(c.Request.Context())
+		if !ok {
+			t.Fatal("client IP missing from request context")
+		}
+		if ip != "192.0.2.10" {
+			t.Fatalf("client IP = %q, want %q", ip, "192.0.2.10")
+		}
+		c.Status(http.StatusNoContent)
+	})
+
+	resp := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "10.0.0.1:1234"
+	req.Header.Set("X-Forwarded-For", "192.0.2.10, 10.0.0.2")
+	r.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", resp.Code, http.StatusNoContent)
 	}
 }
 
@@ -180,7 +236,8 @@ func TestRateLimiterConcurrency(t *testing.T) {
 	}
 
 	r := gin.New()
-	r.GET("/", limiter.Middleware(func(_ *http.Request) string { return "concurrent-client" }), func(c *gin.Context) {
+	r.Use(clientIPForTest("concurrent-client"))
+	r.GET("/", limiter.Middleware(), func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
 
@@ -213,5 +270,13 @@ func TestRateLimiterConcurrency(t *testing.T) {
 	}
 	if got := rejected.Load(); got != 300 {
 		t.Fatalf("rejected requests = %d, want %d", got, 300)
+	}
+}
+
+func clientIPForTest(ip string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := requestcontext.WithClientIP(c.Request.Context(), ip)
+		c.Request = c.Request.WithContext(ctx)
+		c.Next()
 	}
 }

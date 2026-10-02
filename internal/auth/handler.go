@@ -4,12 +4,11 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"net"
 	"net/http"
-	"strings"
 
 	"github.com/emanuelfelicio/artblogapi/config/response"
 	"github.com/emanuelfelicio/artblogapi/config/validation"
+	"github.com/emanuelfelicio/artblogapi/internal/middleware/requestcontext"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
@@ -94,7 +93,11 @@ func (h *handler) Register(c *gin.Context) {
 
 	reqCtx := c.Request.Context()
 	userAgent := c.Request.UserAgent()
-	ip := extractIP(c.Request)
+	ip, ok := requestcontext.ClientIP(reqCtx)
+	if !ok {
+		h.clientIPMissing(c)
+		return
+	}
 	deviceID := c.Request.Header.Get("X-Device-ID")
 
 	authResult, err := h.service.Register(reqCtx, req.Username, req.Email, req.Password, userAgent, ip, deviceID)
@@ -153,7 +156,11 @@ func (h *handler) Login(c *gin.Context) {
 
 	reqCtx := c.Request.Context()
 	userAgent := c.Request.UserAgent()
-	ip := extractIP(c.Request)
+	ip, ok := requestcontext.ClientIP(reqCtx)
+	if !ok {
+		h.clientIPMissing(c)
+		return
+	}
 	deviceID := c.Request.Header.Get("X-Device-ID")
 
 	authResult, err := h.service.Login(reqCtx, req.Credential, req.Password, userAgent, ip, deviceID)
@@ -205,7 +212,11 @@ func (h *handler) Refresh(c *gin.Context) {
 
 	reqCtx := c.Request.Context()
 	userAgent := c.Request.UserAgent()
-	ip := extractIP(c.Request)
+	ip, ok := requestcontext.ClientIP(reqCtx)
+	if !ok {
+		h.clientIPMissing(c)
+		return
+	}
 	deviceID := c.Request.Header.Get("X-Device-ID")
 
 	authResult, err := h.service.Refresh(reqCtx, refreshToken, userAgent, ip, deviceID)
@@ -286,17 +297,8 @@ func (h *handler) clearRefreshTokenCookie(c *gin.Context) {
 	)
 }
 
-func extractIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		ips := strings.Split(xff, ",")
-		ip := strings.TrimSpace(ips[0])
-		if net.ParseIP(ip) != nil {
-			return ip
-		}
-	}
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return ip
+func (h *handler) clientIPMissing(c *gin.Context) {
+	err := errors.New("client IP missing from request context")
+	h.logger.Error("request_context_invalid", slog.Any("err", err))
+	response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "internal server error")
 }
