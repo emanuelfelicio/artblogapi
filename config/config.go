@@ -38,6 +38,12 @@ type Config struct {
 	WorkerHeartbeatInterval time.Duration
 	WorkerBackoffInterval   time.Duration
 	WorkerMaxRetries        int
+	RateLimitEnabled        bool
+	RateLimitGlobalLimit    int
+	RateLimitGlobalWindow   time.Duration
+	RateLimitAuthLimit      int
+	RateLimitAuthWindow     time.Duration
+	RateLimitTrustedProxies []string
 }
 
 func LoadConfig() Config {
@@ -88,6 +94,12 @@ func LoadConfig() Config {
 		WorkerHeartbeatInterval: getEnvDurationOrDefault("STORAGE_WORKER_HEARTBEAT_INTERVAL", 10*time.Second),
 		WorkerBackoffInterval:   getEnvDurationOrDefault("STORAGE_WORKER_BACKOFF_INTERVAL", 10*time.Second),
 		WorkerMaxRetries:        getEnvIntOrDefault("STORAGE_MAX_RETRIES", 3),
+		RateLimitEnabled:        getEnvBoolOrDefault("RATE_LIMIT_ENABLED", true),
+		RateLimitGlobalLimit:    getEnvPositiveIntOrDefault("RATE_LIMIT_GLOBAL_LIMIT", 100),
+		RateLimitGlobalWindow:   getEnvPositiveDurationOrDefault("RATE_LIMIT_GLOBAL_WINDOW", time.Minute),
+		RateLimitAuthLimit:      getEnvPositiveIntOrDefault("RATE_LIMIT_AUTH_LIMIT", 10),
+		RateLimitAuthWindow:     getEnvPositiveDurationOrDefault("RATE_LIMIT_AUTH_WINDOW", time.Minute),
+		RateLimitTrustedProxies: getEnvCSV("RATE_LIMIT_TRUSTED_PROXIES"),
 	}
 }
 
@@ -122,6 +134,52 @@ func getEnvIntOrDefault(key string, fallback int) int {
 		log.Fatalf("invalid integer for %s: %v", key, err)
 	}
 	return parsed
+}
+
+func getEnvPositiveIntOrDefault(key string, fallback int) int {
+	value := getEnvIntOrDefault(key, fallback)
+	if value <= 0 {
+		log.Fatalf("%s must be positive", key)
+	}
+	return value
+}
+
+func getEnvPositiveDurationOrDefault(key string, fallback time.Duration) time.Duration {
+	value := getEnvDurationOrDefault(key, fallback)
+	if value <= 0 {
+		log.Fatalf("%s must be positive", key)
+	}
+	return value
+}
+
+func getEnvBoolOrDefault(key string, fallback bool) bool {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		log.Fatalf("invalid boolean for %s: %v", key, err)
+	}
+	return parsed
+}
+
+func getEnvCSV(key string) []string {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return nil
+	}
+
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			result = append(result, part)
+		}
+	}
+	return result
 }
 
 func normalizeBaseURL(url string) string {

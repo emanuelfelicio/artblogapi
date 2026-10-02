@@ -31,7 +31,7 @@ flowchart LR
 7. inicia o servidor HTTP.
 
 A aplicação carrega configurações de banco, JWT, porta, logging, storage,
-cookies e worker por variáveis de ambiente. `DATABASE_URL` e `JWT_SECRET` são
+cookies, rate limiting e worker por variáveis de ambiente. `DATABASE_URL` e `JWT_SECRET` são
 obrigatórios; os demais valores possuem defaults quando aplicável.
 
 Ao receber `SIGINT` ou `SIGTERM`, o processo encerra o servidor HTTP, cancela o
@@ -193,6 +193,23 @@ A especificação Swagger é gerada a partir das anotações da API e os arquivo
 gerados ficam em `docs/swagger/`. Alterações nessas anotações exigem
 regeneração.
 
+### Rate limiting
+
+A API implementa rate limiting in-memory baseado no algoritmo token bucket
+(`golang.org/x/time/rate`). O controle opera em dois níveis quando habilitado:
+
+- **Global**: aplicado a todo o grupo `/api/v1` (default: 100 requisições/minuto);
+- **Autenticação**: aplicado a `/auth/register`, `/auth/login` e `/auth/refresh`
+  (default: 10 requisições/minuto) para proteção contra brute force.
+
+Quando o limite é excedido, a resposta retorna status HTTP `429 Too Many Requests`,
+código de erro `RATE_LIMITED` no padrão da API e o cabeçalho `Retry-After` com o
+tempo de espera estimado em segundos.
+
+A identificação do IP do cliente valida proxies reversos contra uma lista de CIDRs
+configurados (`RATE_LIMIT_TRUSTED_PROXIES`), ignorando cabeçalhos de encaminhamento
+vindos de fontes não confiáveis.
+
 ### Logging e erros
 
 `config/logger/` configura `slog`, com texto fora de produção e JSON quando
@@ -236,6 +253,12 @@ partir desse conteúdo.
 - migrations e queries usam SQLC, queries parametrizadas e constraints do
   PostgreSQL.
 - O sistema usa autorização por propriedade 'ownership';
+- rate limiting em memória usando token bucket protege a API `/api/v1` e
+  aplica restrição reforçada contra força bruta nos endpoints de autenticação
+  (`/register`, `/login`, `/refresh`);
+- a resolução de IP do cliente valida proxies reversos com CIDRs configurados
+  (`RATE_LIMIT_TRUSTED_PROXIES`), ignorando headers de encaminhamento de
+  origens não confiáveis para prevenir spoofing de IP;
 
 ## 10. Testes
 

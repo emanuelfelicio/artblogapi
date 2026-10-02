@@ -10,5 +10,6 @@ const (
 	ForbiddenCode      ErrorCode = "FORBIDDEN"
 	NotFoundCode       ErrorCode = "NOT_FOUND"
 	InvalidCode        ErrorCode = "UNPROCESSABLE_ENTITY"
+	RateLimitedCode    ErrorCode = "RATE_LIMITED"
 	InternalServerCode ErrorCode = "INTERNAL_SERVER_ERROR"
 )
