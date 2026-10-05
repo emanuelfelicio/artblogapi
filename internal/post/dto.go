@@ -15,13 +15,15 @@ type UpdatePostRequest struct {
 }
 
 type PostResponse struct {
-	ID        string              `json:"id"`
-	AuthorID  string              `json:"author_id"`
-	Title     string              `json:"title"`
-	Content   string              `json:"content"`
-	Images    []PostImageResponse `json:"images"`
-	CreatedAt time.Time           `json:"created_at"`
-	UpdatedAt time.Time           `json:"updated_at"`
+	ID         string              `json:"id"`
+	AuthorID   string              `json:"author_id"`
+	Title      string              `json:"title"`
+	Content    string              `json:"content"`
+	LikesCount int64               `json:"likes_count"`
+	LikedByMe  bool                `json:"liked_by_me"`
+	Images     []PostImageResponse `json:"images"`
+	CreatedAt  time.Time           `json:"created_at"`
+	UpdatedAt  time.Time           `json:"updated_at"`
 }
 
 type PostImageResponse struct {

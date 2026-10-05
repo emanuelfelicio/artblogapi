@@ -64,8 +64,11 @@ func (r *repository) GetPostByIDForUpdate(ctx context.Context, id uuid.UUID) (Po
 	return mapPost(row), nil
 }
 
-func (r *repository) GetPostWithImages(ctx context.Context, id uuid.UUID) (Post, error) {
-	rows, err := r.q(ctx).GetPostWithImagesByID(ctx, id)
+func (r *repository) GetPostWithImages(ctx context.Context, id uuid.UUID, viewerID *uuid.UUID) (Post, error) {
+	rows, err := r.q(ctx).GetPostWithImagesByID(ctx, dbgen.GetPostWithImagesByIDParams{
+		ID:       id,
+		ViewerID: nullableUUID(viewerID),
+	})
 	if err != nil {
 		return Post{}, fmt.Errorf("get_post_with_images: %w", err)
 	}
@@ -74,13 +77,15 @@ func (r *repository) GetPostWithImages(ctx context.Context, id uuid.UUID) (Post,
 	}
 
 	p := Post{
-		ID:        rows[0].ID,
-		AuthorID:  rows[0].AuthorID,
-		Title:     rows[0].Title,
-		Content:   rows[0].Content,
-		CreatedAt: rows[0].CreatedAt.Time,
-		UpdatedAt: rows[0].UpdatedAt.Time,
-		Images:    make([]PostImage, 0, len(rows)),
+		ID:         rows[0].ID,
+		AuthorID:   rows[0].AuthorID,
+		Title:      rows[0].Title,
+		Content:    rows[0].Content,
+		LikesCount: rows[0].LikesCount,
+		LikedByMe:  rows[0].LikedByMe,
+		CreatedAt:  rows[0].CreatedAt.Time,
+		UpdatedAt:  rows[0].UpdatedAt.Time,
+		Images:     make([]PostImage, 0, len(rows)),
 	}
 
 	for _, row := range rows {
@@ -126,6 +131,20 @@ func (r *repository) UpdatePost(ctx context.Context, id uuid.UUID, title, conten
 func (r *repository) DeletePost(ctx context.Context, id uuid.UUID) error {
 	if err := r.q(ctx).DeletePost(ctx, id); err != nil {
 		return fmt.Errorf("delete_post: %w", err)
+	}
+	return nil
+}
+
+func (r *repository) LikePost(ctx context.Context, postID, userID uuid.UUID) error {
+	if err := r.q(ctx).LikePost(ctx, dbgen.LikePostParams{PostID: postID, UserID: userID}); err != nil {
+		return fmt.Errorf("like_post: %w", err)
+	}
+	return nil
+}
+
+func (r *repository) UnlikePost(ctx context.Context, postID, userID uuid.UUID) error {
+	if err := r.q(ctx).UnlikePost(ctx, dbgen.UnlikePostParams{PostID: postID, UserID: userID}); err != nil {
+		return fmt.Errorf("unlike_post: %w", err)
 	}
 	return nil
 }
@@ -210,10 +229,11 @@ func (r *repository) GetPostImagesByPostIDs(ctx context.Context, postIDs []uuid.
 	return result, nil
 }
 
-func (r *repository) ListRecentPosts(ctx context.Context, limit, offset int32) ([]Post, error) {
+func (r *repository) ListRecentPosts(ctx context.Context, limit, offset int32, viewerID *uuid.UUID) ([]Post, error) {
 	rows, err := r.q(ctx).ListRecentPosts(ctx, dbgen.ListRecentPostsParams{
-		Limit:  limit,
-		Offset: offset,
+		Limit:    limit,
+		Offset:   offset,
+		ViewerID: nullableUUID(viewerID),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list_recent_posts: %w", err)
@@ -221,16 +241,26 @@ func (r *repository) ListRecentPosts(ctx context.Context, limit, offset int32) (
 
 	posts := make([]Post, 0, len(rows))
 	for _, row := range rows {
-		posts = append(posts, mapPost(row))
+		posts = append(posts, Post{
+			ID:         row.ID,
+			AuthorID:   row.AuthorID,
+			Title:      row.Title,
+			Content:    row.Content,
+			LikesCount: row.LikesCount,
+			LikedByMe:  row.LikedByMe,
+			CreatedAt:  row.CreatedAt.Time,
+			UpdatedAt:  row.UpdatedAt.Time,
+		})
 	}
 	return posts, nil
 }
 
-func (r *repository) ListPostsByAuthor(ctx context.Context, authorID uuid.UUID, limit, offset int32) ([]Post, error) {
+func (r *repository) ListPostsByAuthor(ctx context.Context, authorID uuid.UUID, limit, offset int32, viewerID *uuid.UUID) ([]Post, error) {
 	rows, err := r.q(ctx).ListPostsByAuthor(ctx, dbgen.ListPostsByAuthorParams{
 		AuthorID: authorID,
 		Limit:    limit,
 		Offset:   offset,
+		ViewerID: nullableUUID(viewerID),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list_posts_by_author: %w", err)
@@ -238,7 +268,16 @@ func (r *repository) ListPostsByAuthor(ctx context.Context, authorID uuid.UUID, 
 
 	posts := make([]Post, 0, len(rows))
 	for _, row := range rows {
-		posts = append(posts, mapPost(row))
+		posts = append(posts, Post{
+			ID:         row.ID,
+			AuthorID:   row.AuthorID,
+			Title:      row.Title,
+			Content:    row.Content,
+			LikesCount: row.LikesCount,
+			LikedByMe:  row.LikedByMe,
+			CreatedAt:  row.CreatedAt.Time,
+			UpdatedAt:  row.UpdatedAt.Time,
+		})
 	}
 	return posts, nil
 }
@@ -259,4 +298,11 @@ func mapPost(row dbgen.Post) Post {
 		CreatedAt: row.CreatedAt.Time,
 		UpdatedAt: row.UpdatedAt.Time,
 	}
+}
+
+func nullableUUID(value *uuid.UUID) pgtype.UUID {
+	if value == nil {
+		return pgtype.UUID{}
+	}
+	return pgtype.UUID{Bytes: *value, Valid: true}
 }

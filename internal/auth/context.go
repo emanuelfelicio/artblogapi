@@ -28,3 +28,14 @@ func GetUserID(c *gin.Context) (uuid.UUID, error) {
 
 	return userID, nil
 }
+
+func GetOptionalUserID(c *gin.Context) (*uuid.UUID, error) {
+	if _, exists := c.Get(ContextAuthPrincipalKey); !exists {
+		return nil, nil
+	}
+	userID, err := GetUserID(c)
+	if err != nil {
+		return nil, err
+	}
+	return &userID, nil
+}

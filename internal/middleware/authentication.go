@@ -35,3 +35,19 @@ func Authentication(provider *token.TokenProvider) gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+func OptionalAuthentication(provider *token.TokenProvider) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+			c.Next()
+			return
+		}
+
+		principal, err := provider.VerifyAccessToken(strings.TrimPrefix(authHeader, "Bearer "))
+		if err == nil {
+			c.Set(auth.ContextAuthPrincipalKey, principal)
+		}
+		c.Next()
+	}
+}

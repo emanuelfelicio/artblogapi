@@ -16,18 +16,20 @@ type Repository interface {
 	WithTransaction(ctx context.Context, fn func(txCtx context.Context) error) error
 
 	CreatePost(ctx context.Context, id, authorID uuid.UUID, title, content string) (Post, error)
-	GetPostWithImages(ctx context.Context, id uuid.UUID) (Post, error)
+	GetPostWithImages(ctx context.Context, id uuid.UUID, viewerID *uuid.UUID) (Post, error)
 	GetPostByIDForUpdate(ctx context.Context, id uuid.UUID) (Post, error)
 	UpdatePost(ctx context.Context, id uuid.UUID, title, content *string) (Post, error)
 	DeletePost(ctx context.Context, id uuid.UUID) error
+	LikePost(ctx context.Context, postID, userID uuid.UUID) error
+	UnlikePost(ctx context.Context, postID, userID uuid.UUID) error
 
 	BatchInsertPostImages(ctx context.Context, postID uuid.UUID, uploadIDs []uuid.UUID, positions []int16) error
 	DeletePostImages(ctx context.Context, postID uuid.UUID, uploadIDs []uuid.UUID) error
 	UpdatePostImagePositions(ctx context.Context, postID uuid.UUID, uploadIDs []uuid.UUID, positions []int16) error
 	DeletePostImagesByPostID(ctx context.Context, postID uuid.UUID) ([]uuid.UUID, error)
 	GetPostImagesByPostIDs(ctx context.Context, postIDs []uuid.UUID) (map[uuid.UUID][]PostImage, error)
-	ListRecentPosts(ctx context.Context, limit, offset int32) ([]Post, error)
-	ListPostsByAuthor(ctx context.Context, authorID uuid.UUID, limit, offset int32) ([]Post, error)
+	ListRecentPosts(ctx context.Context, limit, offset int32, viewerID *uuid.UUID) ([]Post, error)
+	ListPostsByAuthor(ctx context.Context, authorID uuid.UUID, limit, offset int32, viewerID *uuid.UUID) ([]Post, error)
 }
 
 type service struct {
@@ -90,7 +92,7 @@ func (s *service) CreatePost(ctx context.Context, authorID uuid.UUID, title, con
 			}
 		}
 
-		fullPost, err := s.repo.GetPostWithImages(txCtx, postID)
+		fullPost, err := s.repo.GetPostWithImages(txCtx, postID, nil)
 		if err != nil {
 			return err
 		}
@@ -104,14 +106,14 @@ func (s *service) CreatePost(ctx context.Context, authorID uuid.UUID, title, con
 	return createdPost, nil
 }
 
-func (s *service) GetPost(ctx context.Context, id uuid.UUID) (Post, error) {
-	return s.repo.GetPostWithImages(ctx, id)
+func (s *service) GetPost(ctx context.Context, id uuid.UUID, viewerID *uuid.UUID) (Post, error) {
+	return s.repo.GetPostWithImages(ctx, id, viewerID)
 }
 
-func (s *service) ListRecentPosts(ctx context.Context, limit, offset int32) ([]Post, error) {
+func (s *service) ListRecentPosts(ctx context.Context, limit, offset int32, viewerID *uuid.UUID) ([]Post, error) {
 	limit, offset = NormalizePagination(limit, offset)
 
-	posts, err := s.repo.ListRecentPosts(ctx, limit, offset)
+	posts, err := s.repo.ListRecentPosts(ctx, limit, offset, viewerID)
 	if err != nil {
 		return nil, err
 	}
@@ -123,10 +125,10 @@ func (s *service) ListRecentPosts(ctx context.Context, limit, offset int32) ([]P
 	return posts, nil
 }
 
-func (s *service) ListPostsByAuthor(ctx context.Context, authorID uuid.UUID, limit, offset int32) ([]Post, error) {
+func (s *service) ListPostsByAuthor(ctx context.Context, authorID uuid.UUID, limit, offset int32, viewerID *uuid.UUID) ([]Post, error) {
 	limit, offset = NormalizePagination(limit, offset)
 
-	posts, err := s.repo.ListPostsByAuthor(ctx, authorID, limit, offset)
+	posts, err := s.repo.ListPostsByAuthor(ctx, authorID, limit, offset, viewerID)
 	if err != nil {
 		return nil, err
 	}
@@ -136,6 +138,24 @@ func (s *service) ListPostsByAuthor(ctx context.Context, authorID uuid.UUID, lim
 	}
 
 	return posts, nil
+}
+
+func (s *service) LikePost(ctx context.Context, postID, userID uuid.UUID) error {
+	return s.repo.WithTransaction(ctx, func(txCtx context.Context) error {
+		if _, err := s.repo.GetPostByIDForUpdate(txCtx, postID); err != nil {
+			return err
+		}
+		return s.repo.LikePost(txCtx, postID, userID)
+	})
+}
+
+func (s *service) UnlikePost(ctx context.Context, postID, userID uuid.UUID) error {
+	return s.repo.WithTransaction(ctx, func(txCtx context.Context) error {
+		if _, err := s.repo.GetPostByIDForUpdate(txCtx, postID); err != nil {
+			return err
+		}
+		return s.repo.UnlikePost(txCtx, postID, userID)
+	})
 }
 
 func (s *service) UpdatePost(ctx context.Context, postID, authorID uuid.UUID, title, content *string, imageUploadIDs []string) (Post, error) {
