@@ -103,6 +103,16 @@ func (ns NullUploadStatus) Value() (driver.Value, error) {
 	return string(ns.UploadStatus), nil
 }
 
+type Comment struct {
+	ID        uuid.UUID
+	PostID    uuid.UUID
+	AuthorID  uuid.UUID
+	Content   string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+	DeletedAt pgtype.Timestamptz
+}
+
 type Post struct {
 	ID        uuid.UUID
 	AuthorID  uuid.UUID
