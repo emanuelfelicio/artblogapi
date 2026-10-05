@@ -194,7 +194,7 @@ As rotas da aplicação usam o prefixo `/api/v1`. As rotas públicas incluem
 registro, login, refresh, consulta de perfis públicos e consulta de posts.
 Logout, gerenciamento do próprio perfil, uploads e operações de criação,
 alteração e remoção de posts exigem autenticação. Comentários podem ser
-listados publicamente em `/posts/:post_id/comments`; criar, alterar e excluir
+listados publicamente em `/posts/:id/comments`; criar, alterar e excluir
 comentários exige autenticação e autorização do autor.
 
 O Swagger é servido em `/swagger/*any`, fora do prefixo `/api/v1`.

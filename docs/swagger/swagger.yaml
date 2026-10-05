@@ -728,13 +728,13 @@ paths:
       summary: Update post
       tags:
       - posts
-  /posts/{post_id}/comments:
+  /posts/{id}/comments:
     get:
       description: Returns non-deleted comments for a post, newest first.
       parameters:
       - description: Post UUID
         in: path
-        name: post_id
+        name: id
         required: true
         type: string
       - description: Number of comments (default 20, max 50)
@@ -769,7 +769,7 @@ paths:
       parameters:
       - description: Post UUID
         in: path
-        name: post_id
+        name: id
         required: true
         type: string
       - description: Comment request
@@ -802,18 +802,18 @@ paths:
       summary: Create comment
       tags:
       - comments
-  /posts/{post_id}/comments/{id}:
+  /posts/{id}/comments/{comment_id}:
     delete:
       description: Soft-deletes a comment owned by the authenticated user.
       parameters:
       - description: Post UUID
         in: path
-        name: post_id
+        name: id
         required: true
         type: string
       - description: Comment UUID
         in: path
-        name: id
+        name: comment_id
         required: true
         type: string
       responses:
@@ -846,12 +846,12 @@ paths:
       parameters:
       - description: Post UUID
         in: path
-        name: post_id
+        name: id
         required: true
         type: string
       - description: Comment UUID
         in: path
-        name: id
+        name: comment_id
         required: true
         type: string
       - description: Comment request

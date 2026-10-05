@@ -29,15 +29,15 @@ func NewHandler(service Service, logger *slog.Logger) *handler {
 //	@Description	Returns non-deleted comments for a post, newest first.
 //	@Tags			comments
 //	@Produce		json
-//	@Param			post_id	path		string	true	"Post UUID"
+//	@Param			id		path		string	true	"Post UUID"
 //	@Param			limit	query		int		false	"Number of comments (default 20, max 50)"
 //	@Param			offset	query		int		false	"Offset for pagination"
 //	@Success		200		{object}	response.Response[[]CommentResponse]
 //	@Failure		400		{object}	response.ErrorResponse[any]
 //	@Failure		404		{object}	response.ErrorResponse[any]
-//	@Router			/posts/{post_id}/comments [get]
+//	@Router			/posts/{id}/comments [get]
 func (h *handler) List(c *gin.Context) {
-	postID, err := uuid.Parse(c.Param("post_id"))
+	postID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		response.Fail(c, http.StatusBadRequest, response.ParseCode, "invalid post id")
 		return
@@ -62,15 +62,15 @@ func (h *handler) List(c *gin.Context) {
 //	@Security		BearerAuth
 //	@Accept			json
 //	@Produce		json
-//	@Param			post_id	path		string			true	"Post UUID"
+//	@Param			id		path		string			true	"Post UUID"
 //	@Param			request	body		CommentRequest	true	"Comment request"
 //	@Success		201		{object}	response.Response[CommentResponse]
 //	@Failure		400		{object}	response.ErrorResponse[any]
 //	@Failure		401		{object}	response.ErrorResponse[any]
 //	@Failure		404		{object}	response.ErrorResponse[any]
-//	@Router			/posts/{post_id}/comments [post]
+//	@Router			/posts/{id}/comments [post]
 func (h *handler) Create(c *gin.Context) {
-	postID, err := uuid.Parse(c.Param("post_id"))
+	postID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		response.Fail(c, http.StatusBadRequest, response.ParseCode, "invalid post id")
 		return
@@ -109,15 +109,15 @@ func (h *handler) Create(c *gin.Context) {
 //	@Security		BearerAuth
 //	@Accept			json
 //	@Produce		json
-//	@Param			post_id	path		string			true	"Post UUID"
-//	@Param			id		path		string			true	"Comment UUID"
+//	@Param			id			path		string			true	"Post UUID"
+//	@Param			comment_id	path		string			true	"Comment UUID"
 //	@Param			request	body		CommentRequest	true	"Comment request"
 //	@Success		200		{object}	response.Response[CommentResponse]
 //	@Failure		400		{object}	response.ErrorResponse[any]
 //	@Failure		401		{object}	response.ErrorResponse[any]
 //	@Failure		403		{object}	response.ErrorResponse[any]
 //	@Failure		404		{object}	response.ErrorResponse[any]
-//	@Router			/posts/{post_id}/comments/{id} [put]
+//	@Router			/posts/{id}/comments/{comment_id} [put]
 func (h *handler) Update(c *gin.Context) {
 	postID, commentID, ok := h.parseIDs(c)
 	if !ok {
@@ -156,14 +156,14 @@ func (h *handler) Update(c *gin.Context) {
 //	@Description	Soft-deletes a comment owned by the authenticated user.
 //	@Tags			comments
 //	@Security		BearerAuth
-//	@Param			post_id	path	string	true	"Post UUID"
-//	@Param			id		path	string	true	"Comment UUID"
+//	@Param			id			path	string	true	"Post UUID"
+//	@Param			comment_id	path	string	true	"Comment UUID"
 //	@Success		204
 //	@Failure		400	{object}	response.ErrorResponse[any]
 //	@Failure		401	{object}	response.ErrorResponse[any]
 //	@Failure		403	{object}	response.ErrorResponse[any]
 //	@Failure		404	{object}	response.ErrorResponse[any]
-//	@Router			/posts/{post_id}/comments/{id} [delete]
+//	@Router			/posts/{id}/comments/{comment_id} [delete]
 func (h *handler) Delete(c *gin.Context) {
 	postID, commentID, ok := h.parseIDs(c)
 	if !ok {
@@ -183,12 +183,12 @@ func (h *handler) Delete(c *gin.Context) {
 }
 
 func (h *handler) parseIDs(c *gin.Context) (uuid.UUID, uuid.UUID, bool) {
-	postID, err := uuid.Parse(c.Param("post_id"))
+	postID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		response.Fail(c, http.StatusBadRequest, response.ParseCode, "invalid post id")
 		return uuid.Nil, uuid.Nil, false
 	}
-	commentID, err := uuid.Parse(c.Param("id"))
+	commentID, err := uuid.Parse(c.Param("comment_id"))
 	if err != nil {
 		response.Fail(c, http.StatusBadRequest, response.ParseCode, "invalid comment id")
 		return uuid.Nil, uuid.Nil, false

@@ -538,7 +538,7 @@ const docTemplate = `{
                 ]
             }
         },
-        "/posts/{post_id}/comments": {
+        "/posts/{id}/comments": {
             "get": {
                 "description": "Returns non-deleted comments for a post, newest first.",
                 "produces": [
@@ -552,7 +552,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Post UUID",
-                        "name": "post_id",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     },
@@ -605,7 +605,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Post UUID",
-                        "name": "post_id",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     },
@@ -652,7 +652,7 @@ const docTemplate = `{
                 ]
             }
         },
-        "/posts/{post_id}/comments/{id}": {
+        "/posts/{id}/comments/{comment_id}": {
             "put": {
                 "consumes": [
                     "application/json"
@@ -668,14 +668,14 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Post UUID",
-                        "name": "post_id",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Comment UUID",
-                        "name": "id",
+                        "name": "comment_id",
                         "in": "path",
                         "required": true
                     },
@@ -737,14 +737,14 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Post UUID",
-                        "name": "post_id",
+                        "name": "id",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
                         "description": "Comment UUID",
-                        "name": "id",
+                        "name": "comment_id",
                         "in": "path",
                         "required": true
                     }
