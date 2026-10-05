@@ -538,6 +538,253 @@ const docTemplate = `{
                 ]
             }
         },
+        "/posts/{post_id}/comments": {
+            "get": {
+                "description": "Returns non-deleted comments for a post, newest first.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "comments"
+                ],
+                "summary": "List comments",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Post UUID",
+                        "name": "post_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of comments (default 20, max 50)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset for pagination",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/Response-array_internal_comment_CommentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "comments"
+                ],
+                "summary": "Create comment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Post UUID",
+                        "name": "post_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Comment request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/CommentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/Response-CommentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/posts/{post_id}/comments/{id}": {
+            "put": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "comments"
+                ],
+                "summary": "Update comment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Post UUID",
+                        "name": "post_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comment UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Comment request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/CommentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/Response-CommentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "description": "Soft-deletes a comment owned by the authenticated user.",
+                "tags": [
+                    "comments"
+                ],
+                "summary": "Delete comment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Post UUID",
+                        "name": "post_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comment UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse-any"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
         "/uploads/complete": {
             "post": {
                 "description": "Marks a pending upload as complete after the file has been uploaded directly to storage.",
@@ -1109,6 +1356,42 @@ const docTemplate = `{
                 }
             }
         },
+        "CommentRequest": {
+            "type": "object",
+            "required": [
+                "content"
+            ],
+            "properties": {
+                "content": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "minLength": 1
+                }
+            }
+        },
+        "CommentResponse": {
+            "type": "object",
+            "properties": {
+                "author_id": {
+                    "type": "string"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "post_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "CompleteUploadRequest": {
             "type": "object",
             "required": [
@@ -1154,6 +1437,7 @@ const docTemplate = `{
                 "FORBIDDEN",
                 "NOT_FOUND",
                 "UNPROCESSABLE_ENTITY",
+                "RATE_LIMITED",
                 "INTERNAL_SERVER_ERROR"
             ],
             "x-enum-varnames": [
@@ -1164,6 +1448,7 @@ const docTemplate = `{
                 "ForbiddenCode",
                 "NotFoundCode",
                 "InvalidCode",
+                "RateLimitedCode",
                 "InternalServerCode"
             ]
         },
@@ -1470,6 +1755,14 @@ const docTemplate = `{
                 }
             }
         },
+        "Response-CommentResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/CommentResponse"
+                }
+            }
+        },
         "Response-array_PostResponse": {
             "type": "object",
             "properties": {
@@ -1477,6 +1770,17 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/PostResponse"
+                    }
+                }
+            }
+        },
+        "Response-array_internal_comment_CommentResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CommentResponse"
                     }
                 }
             }

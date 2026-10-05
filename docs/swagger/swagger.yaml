@@ -11,6 +11,30 @@ definitions:
     required:
     - ids
     type: object
+  CommentRequest:
+    properties:
+      content:
+        maxLength: 500
+        minLength: 1
+        type: string
+    required:
+    - content
+    type: object
+  CommentResponse:
+    properties:
+      author_id:
+        type: string
+      content:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      post_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
   CompleteUploadRequest:
     properties:
       upload_id:
@@ -44,6 +68,7 @@ definitions:
     - FORBIDDEN
     - NOT_FOUND
     - UNPROCESSABLE_ENTITY
+    - RATE_LIMITED
     - INTERNAL_SERVER_ERROR
     type: string
     x-enum-varnames:
@@ -54,6 +79,7 @@ definitions:
     - ForbiddenCode
     - NotFoundCode
     - InvalidCode
+    - RateLimitedCode
     - InternalServerCode
   ErrorInfo-any:
     properties:
@@ -264,11 +290,23 @@ definitions:
         example: Bearer
         type: string
     type: object
+  Response-CommentResponse:
+    properties:
+      data:
+        $ref: '#/definitions/CommentResponse'
+    type: object
   Response-array_PostResponse:
     properties:
       data:
         items:
           $ref: '#/definitions/PostResponse'
+        type: array
+    type: object
+  Response-array_internal_comment_CommentResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/CommentResponse'
         type: array
     type: object
   Response-array_internal_user_UserSummaryResponse:
@@ -690,6 +728,166 @@ paths:
       summary: Update post
       tags:
       - posts
+  /posts/{post_id}/comments:
+    get:
+      description: Returns non-deleted comments for a post, newest first.
+      parameters:
+      - description: Post UUID
+        in: path
+        name: post_id
+        required: true
+        type: string
+      - description: Number of comments (default 20, max 50)
+        in: query
+        name: limit
+        type: integer
+      - description: Offset for pagination
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/Response-array_internal_comment_CommentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+      summary: List comments
+      tags:
+      - comments
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Post UUID
+        in: path
+        name: post_id
+        required: true
+        type: string
+      - description: Comment request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/CommentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/Response-CommentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+      security:
+      - BearerAuth: []
+      summary: Create comment
+      tags:
+      - comments
+  /posts/{post_id}/comments/{id}:
+    delete:
+      description: Soft-deletes a comment owned by the authenticated user.
+      parameters:
+      - description: Post UUID
+        in: path
+        name: post_id
+        required: true
+        type: string
+      - description: Comment UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+      security:
+      - BearerAuth: []
+      summary: Delete comment
+      tags:
+      - comments
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Post UUID
+        in: path
+        name: post_id
+        required: true
+        type: string
+      - description: Comment UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Comment request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/CommentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/Response-CommentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+      security:
+      - BearerAuth: []
+      summary: Update comment
+      tags:
+      - comments
   /posts/author/{author_id}:
     get:
       description: Returns a paginated list of posts by a specific author.
