@@ -68,7 +68,7 @@ de presign e path style são configuráveis.
 ## 5. Organização do código
 
 As features principais ficam em `internal/auth`, `internal/user`,
-`internal/post` e `internal/storage`.
+`internal/post`, `internal/comment` e `internal/storage`.
 
 ```text
 Handler -> Service -> Repository
@@ -96,6 +96,14 @@ e validação dos componentes de sessão.
 de posts. O modelo atual suporta título, conteúdo textual e até dez imagens
 ordenadas.
 
+### Comments
+
+`internal/comment` gerencia comentários de nível único em posts. A listagem é
+pública e paginada; criação, edição e exclusão lógica exigem autenticação, e o
+service garante que somente o autor altere seu comentário. O conteúdo é
+normalizado e limitado a 500 caracteres. Respostas aninhadas não fazem parte
+do modelo atual.
+
 ### Storage
 
 `internal/storage` coordena inicialização, conclusão, status, vínculo e
@@ -110,6 +118,8 @@ As migrations em `db/migrations/` definem:
 - `sessions`: hash, expiração, revogação e metadados de refresh;
 - `uploads`: estado, finalidade, chave, tamanho, tipo, retry e agendamento;
 - `posts`: autor, título, conteúdo e timestamps;
+- `comments`: post, autor, conteúdo, timestamps e `deleted_at` para exclusão
+  lógica;
 - `post_images`: relação ordenada entre posts e uploads.
 
 `db/queries/` contém as consultas SQL usadas como entrada pelo SQLC, que gera os
@@ -183,7 +193,9 @@ implementada.
 As rotas da aplicação usam o prefixo `/api/v1`. As rotas públicas incluem
 registro, login, refresh, consulta de perfis públicos e consulta de posts.
 Logout, gerenciamento do próprio perfil, uploads e operações de criação,
-alteração e remoção de posts exigem autenticação.
+alteração e remoção de posts exigem autenticação. Comentários podem ser
+listados publicamente em `/posts/:post_id/comments`; criar, alterar e excluir
+comentários exige autenticação e autorização do autor.
 
 O Swagger é servido em `/swagger/*any`, fora do prefixo `/api/v1`.
 
