@@ -129,6 +129,12 @@ type PostImage struct {
 	CreatedAt pgtype.Timestamptz
 }
 
+type PostLike struct {
+	PostID    uuid.UUID
+	UserID    uuid.UUID
+	CreatedAt pgtype.Timestamptz
+}
+
 type Session struct {
 	ID        string
 	UserID    uuid.UUID
