@@ -16,6 +16,7 @@ import (
 	_ "github.com/emanuelfelicio/artblogapi/docs/swagger"
 	"github.com/emanuelfelicio/artblogapi/internal/auth"
 	"github.com/emanuelfelicio/artblogapi/internal/auth/token"
+	"github.com/emanuelfelicio/artblogapi/internal/comment"
 	"github.com/emanuelfelicio/artblogapi/internal/middleware"
 	"github.com/emanuelfelicio/artblogapi/internal/post"
 	"github.com/emanuelfelicio/artblogapi/internal/user"
@@ -133,6 +134,9 @@ func main() {
 	postRepo := post.NewRepository(queries, pool)
 	postService := post.NewService(postRepo, storageService)
 	postHandler := post.NewHandler(postService, logger, cfg.StoragePublicURL)
+	commentRepo := comment.NewRepository(queries, pool)
+	commentService := comment.NewService(commentRepo)
+	commentHandler := comment.NewHandler(commentService, logger)
 
 	if cfg.AppEnv == "production" {
 		gin.SetMode(gin.ReleaseMode)
@@ -177,6 +181,7 @@ func main() {
 		auth.Routes(v1, authHandler, authMiddleware, authRateLimitMiddleware)
 		user.Routes(v1, userHandler, authMiddleware)
 		storage.Routes(v1, storageHandler, authMiddleware)
+		comment.Routes(v1, commentHandler, authMiddleware)
 		post.Routes(v1, postHandler, authMiddleware)
 	}
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
