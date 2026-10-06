@@ -68,6 +68,8 @@ func (s *serviceRepositoryStub) SoftDelete(ctx context.Context, id, postID uuid.
 	return nil
 }
 
+type txContext struct{}
+
 func TestServiceCreate_TrimsContentAndChecksPost(t *testing.T) {
 	postID := uuid.New()
 	authorID := uuid.New()
@@ -207,7 +209,7 @@ func TestServiceUpdate_RejectsDeletedComment(t *testing.T) {
 }
 
 func TestServiceUpdate_PropagatesTransactionContext(t *testing.T) {
-	wantContext := context.WithValue(context.Background(), struct{}{}, "transaction")
+	wantContext := context.WithValue(context.Background(), txContext{}, "transaction")
 	var gotContext context.Context
 	repo := &serviceRepositoryStub{
 		withTransaction: func(_ context.Context, fn func(context.Context) error) error {
