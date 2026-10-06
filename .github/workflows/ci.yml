@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Check formatting
+        run: test -z "$(gofmt -l .)"
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Check module files
+        run: go mod tidy -diff
+
+      - name: Check sqlc differences
+        run: go tool sqlc diff -f db/sqlc.yaml
+
+      - name: Run vet
+        run: go vet ./...
+
+      - name: Run Staticcheck
+        run: go tool staticcheck -checks=all,-ST1000,-U1000 ./...
+
+      - name: Run tests
+        run: go test -race -count=1 ./...
+
+      - name: Build Docker image
+        run: docker build -t artblogapi:ci .
