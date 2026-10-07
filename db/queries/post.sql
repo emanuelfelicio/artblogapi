@@ -11,6 +11,13 @@ FOR UPDATE;
 
 -- name: GetPostWithImagesByID :many
 SELECT p.id, p.author_id, p.title, p.content, p.created_at, p.updated_at,
+       (SELECT COUNT(*)::bigint FROM post_likes pl WHERE pl.post_id = p.id) AS likes_count,
+       EXISTS (
+           SELECT 1
+           FROM post_likes viewer_like
+           WHERE viewer_like.post_id = p.id
+             AND viewer_like.user_id = sqlc.narg('viewer_id')
+       ) AS liked_by_me,
        pi.upload_id, pi.position, pi.created_at AS image_created_at,
        u.object_key, u.content_type
 FROM posts p
@@ -59,14 +66,28 @@ WHERE pi.post_id = ANY($1::uuid[])
 ORDER BY pi.post_id, pi.position ASC;
 
 -- name: ListRecentPosts :many
-SELECT id, author_id, title, content, created_at, updated_at
-FROM posts
+SELECT p.id, p.author_id, p.title, p.content, p.created_at, p.updated_at,
+       (SELECT COUNT(*)::bigint FROM post_likes pl WHERE pl.post_id = p.id) AS likes_count,
+       EXISTS (
+           SELECT 1
+           FROM post_likes viewer_like
+           WHERE viewer_like.post_id = p.id
+             AND viewer_like.user_id = sqlc.narg('viewer_id')
+       ) AS liked_by_me
+FROM posts p
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2;
 
 -- name: ListPostsByAuthor :many
-SELECT id, author_id, title, content, created_at, updated_at
-FROM posts
-WHERE author_id = $1
+SELECT p.id, p.author_id, p.title, p.content, p.created_at, p.updated_at,
+       (SELECT COUNT(*)::bigint FROM post_likes pl WHERE pl.post_id = p.id) AS likes_count,
+       EXISTS (
+           SELECT 1
+           FROM post_likes viewer_like
+           WHERE viewer_like.post_id = p.id
+             AND viewer_like.user_id = sqlc.narg('viewer_id')
+       ) AS liked_by_me
+FROM posts p
+WHERE p.author_id = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3;

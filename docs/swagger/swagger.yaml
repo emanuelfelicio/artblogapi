@@ -234,6 +234,10 @@ definitions:
         items:
           $ref: '#/definitions/PostImageResponse'
         type: array
+      liked_by_me:
+        type: boolean
+      likes_count:
+        type: integer
       title:
         type: string
       updated_at:
@@ -888,6 +892,73 @@ paths:
       summary: Update comment
       tags:
       - comments
+  /posts/{id}/like:
+    delete:
+      description: Removes the authenticated user's like from a post. Repeating the
+        request is safe.
+      parameters:
+      - description: Post ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+      security:
+      - BearerAuth: []
+      summary: Unlike post
+      tags:
+      - posts
+    put:
+      description: Adds the authenticated user's like to a post. Repeating the request
+        is safe.
+      parameters:
+      - description: Post ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorResponse-any'
+      security:
+      - BearerAuth: []
+      summary: Like post
+      tags:
+      - posts
   /posts/author/{author_id}:
     get:
       description: Returns a paginated list of posts by a specific author.

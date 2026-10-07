@@ -18,11 +18,13 @@ import (
 
 type PostService interface {
 	CreatePost(ctx context.Context, authorID uuid.UUID, title, content string, imageUploadIDs []string) (Post, error)
-	GetPost(ctx context.Context, id uuid.UUID) (Post, error)
-	ListRecentPosts(ctx context.Context, limit, offset int32) ([]Post, error)
-	ListPostsByAuthor(ctx context.Context, authorID uuid.UUID, limit, offset int32) ([]Post, error)
+	GetPost(ctx context.Context, id uuid.UUID, viewerID *uuid.UUID) (Post, error)
+	ListRecentPosts(ctx context.Context, limit, offset int32, viewerID *uuid.UUID) ([]Post, error)
+	ListPostsByAuthor(ctx context.Context, authorID uuid.UUID, limit, offset int32, viewerID *uuid.UUID) ([]Post, error)
 	UpdatePost(ctx context.Context, postID, authorID uuid.UUID, title, content *string, imageUploadIDs []string) (Post, error)
 	DeletePost(ctx context.Context, postID, authorID uuid.UUID) error
+	LikePost(ctx context.Context, postID, userID uuid.UUID) error
+	UnlikePost(ctx context.Context, postID, userID uuid.UUID) error
 }
 
 type handler struct {
@@ -100,7 +102,14 @@ func (h *handler) GetPost(c *gin.Context) {
 		return
 	}
 
-	p, err := h.service.GetPost(c.Request.Context(), postID)
+	viewerID, err := auth.GetOptionalUserID(c)
+	if err != nil {
+		h.logger.Error("optional_auth_error", slog.Any("err", err))
+		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "internal error")
+		return
+	}
+
+	p, err := h.service.GetPost(c.Request.Context(), postID, viewerID)
 	if err != nil {
 		if errors.Is(err, ErrPostNotFound) {
 			response.Fail(c, http.StatusNotFound, response.NotFoundCode, "post not found")
@@ -138,7 +147,14 @@ func (h *handler) ListRecentPosts(c *gin.Context) {
 		}
 	}
 
-	posts, err := h.service.ListRecentPosts(c.Request.Context(), limit, offset)
+	viewerID, err := auth.GetOptionalUserID(c)
+	if err != nil {
+		h.logger.Error("optional_auth_error", slog.Any("err", err))
+		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "internal error")
+		return
+	}
+
+	posts, err := h.service.ListRecentPosts(c.Request.Context(), limit, offset, viewerID)
 	if err != nil {
 		h.logger.Error("list_recent_posts_failed", slog.Any("err", err))
 		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "internal error")
@@ -186,7 +202,14 @@ func (h *handler) ListPostsByAuthor(c *gin.Context) {
 		}
 	}
 
-	posts, err := h.service.ListPostsByAuthor(c.Request.Context(), authorID, limit, offset)
+	viewerID, err := auth.GetOptionalUserID(c)
+	if err != nil {
+		h.logger.Error("optional_auth_error", slog.Any("err", err))
+		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "internal error")
+		return
+	}
+
+	posts, err := h.service.ListPostsByAuthor(c.Request.Context(), authorID, limit, offset, viewerID)
 	if err != nil {
 		h.logger.Error("list_posts_by_author_failed", slog.Any("err", err))
 		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "internal error")
@@ -289,6 +312,65 @@ func (h *handler) DeletePost(c *gin.Context) {
 	response.SuccessNoContent(c, http.StatusNoContent)
 }
 
+// LikePost godoc
+//
+//	@Summary		Like post
+//	@Description	Adds the authenticated user's like to a post. Repeating the request is safe.
+//	@Tags			posts
+//	@Security		BearerAuth
+//	@Param			id	path	string	true	"Post ID"
+//	@Success		204	"No Content"
+//	@Failure		400	{object}	response.ErrorResponse[any]
+//	@Failure		401	{object}	response.ErrorResponse[any]
+//	@Failure		404	{object}	response.ErrorResponse[any]
+//	@Failure		500	{object}	response.ErrorResponse[any]
+//	@Router			/posts/{id}/like [put]
+func (h *handler) LikePost(c *gin.Context) {
+	h.mutateLike(c, true)
+}
+
+// UnlikePost godoc
+//
+//	@Summary		Unlike post
+//	@Description	Removes the authenticated user's like from a post. Repeating the request is safe.
+//	@Tags			posts
+//	@Security		BearerAuth
+//	@Param			id	path	string	true	"Post ID"
+//	@Success		204	"No Content"
+//	@Failure		400	{object}	response.ErrorResponse[any]
+//	@Failure		401	{object}	response.ErrorResponse[any]
+//	@Failure		404	{object}	response.ErrorResponse[any]
+//	@Failure		500	{object}	response.ErrorResponse[any]
+//	@Router			/posts/{id}/like [delete]
+func (h *handler) UnlikePost(c *gin.Context) {
+	h.mutateLike(c, false)
+}
+
+func (h *handler) mutateLike(c *gin.Context, like bool) {
+	postID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, response.ParseCode, "invalid post id")
+		return
+	}
+	userID, err := auth.GetUserID(c)
+	if err != nil {
+		h.logger.Error("auth_error", slog.Any("err", err))
+		response.Fail(c, http.StatusInternalServerError, response.InternalServerCode, "internal error")
+		return
+	}
+
+	if like {
+		err = h.service.LikePost(c.Request.Context(), postID, userID)
+	} else {
+		err = h.service.UnlikePost(c.Request.Context(), postID, userID)
+	}
+	if err != nil {
+		h.handleServiceError(c, err, "mutate_post_like_failed")
+		return
+	}
+	response.SuccessNoContent(c, http.StatusNoContent)
+}
+
 func (h *handler) handleServiceError(c *gin.Context, err error, logMsg string) {
 	switch {
 	case errors.Is(err, ErrPostNotFound):
@@ -326,13 +408,15 @@ func (h *handler) toPostResponse(p Post) PostResponse {
 	}
 
 	return PostResponse{
-		ID:        p.ID.String(),
-		AuthorID:  p.AuthorID.String(),
-		Title:     p.Title,
-		Content:   p.Content,
-		Images:    images,
-		CreatedAt: p.CreatedAt,
-		UpdatedAt: p.UpdatedAt,
+		ID:         p.ID.String(),
+		AuthorID:   p.AuthorID.String(),
+		Title:      p.Title,
+		Content:    p.Content,
+		LikesCount: p.LikesCount,
+		LikedByMe:  p.LikedByMe,
+		Images:     images,
+		CreatedAt:  p.CreatedAt,
+		UpdatedAt:  p.UpdatedAt,
 	}
 }
 

@@ -39,7 +39,7 @@ func TestMain(m *testing.M) {
 func setup(t *testing.T) context.Context {
 	t.Helper()
 	t.Cleanup(func() {
-		_, err := testDBPool.Exec(context.Background(), `TRUNCATE TABLE users, uploads, posts, post_images RESTART IDENTITY CASCADE`)
+		_, err := testDBPool.Exec(context.Background(), `TRUNCATE TABLE users, uploads, posts, post_images, post_likes RESTART IDENTITY CASCADE`)
 		if err != nil {
 			t.Errorf("failed to truncate tables: %v", err)
 		}
@@ -91,7 +91,7 @@ func TestRepository_CreateAndGetPost(t *testing.T) {
 		t.Errorf("expected Title 'Title 1', got %s", created.Title)
 	}
 
-	fetched, err := testRepo.GetPostWithImages(ctx, postID)
+	fetched, err := testRepo.GetPostWithImages(ctx, postID, nil)
 	if err != nil {
 		t.Fatalf("GetPostWithImages: %v", err)
 	}
@@ -124,7 +124,7 @@ func TestRepository_PostWithImages(t *testing.T) {
 		t.Fatalf("BatchInsertPostImages: %v", err)
 	}
 
-	postWithImages, err := testRepo.GetPostWithImages(ctx, postID)
+	postWithImages, err := testRepo.GetPostWithImages(ctx, postID, nil)
 	if err != nil {
 		t.Fatalf("GetPostWithImages: %v", err)
 	}
@@ -207,7 +207,7 @@ func TestRepository_DeletePost_Cascade(t *testing.T) {
 		t.Fatalf("DeletePost: %v", err)
 	}
 
-	_, err = testRepo.GetPostWithImages(ctx, postID)
+	_, err = testRepo.GetPostWithImages(ctx, postID, nil)
 	if !errors.Is(err, ErrPostNotFound) {
 		t.Errorf("expected ErrPostNotFound after delete, got %v", err)
 	}
@@ -228,7 +228,7 @@ func TestRepository_ListRecentAndAuthorPosts(t *testing.T) {
 	_, _ = testRepo.CreatePost(ctx, p2, author2, "Post B1", "Content")
 	_, _ = testRepo.CreatePost(ctx, p3, author1, "Post A2", "Content")
 
-	recent, err := testRepo.ListRecentPosts(ctx, 10, 0)
+	recent, err := testRepo.ListRecentPosts(ctx, 10, 0, nil)
 	if err != nil {
 		t.Fatalf("ListRecentPosts: %v", err)
 	}
@@ -236,7 +236,7 @@ func TestRepository_ListRecentAndAuthorPosts(t *testing.T) {
 		t.Fatalf("expected 3 recent posts, got %d", len(recent))
 	}
 
-	author1Posts, err := testRepo.ListPostsByAuthor(ctx, author1, 10, 0)
+	author1Posts, err := testRepo.ListPostsByAuthor(ctx, author1, 10, 0, nil)
 	if err != nil {
 		t.Fatalf("ListPostsByAuthor: %v", err)
 	}
@@ -323,7 +323,7 @@ func TestRepository_DeferredPositionUniqueness(t *testing.T) {
 		t.Fatalf("deferred position swap failed: %v", err)
 	}
 
-	postWithImages, err := testRepo.GetPostWithImages(ctx, postID)
+	postWithImages, err := testRepo.GetPostWithImages(ctx, postID, nil)
 	if err != nil {
 		t.Fatalf("GetPostWithImages: %v", err)
 	}

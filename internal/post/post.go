@@ -16,13 +16,15 @@ const (
 )
 
 type Post struct {
-	ID        uuid.UUID
-	AuthorID  uuid.UUID
-	Title     string
-	Content   string
-	Images    []PostImage
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID         uuid.UUID
+	AuthorID   uuid.UUID
+	Title      string
+	Content    string
+	LikesCount int64
+	LikedByMe  bool
+	Images     []PostImage
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 type PostImage struct {

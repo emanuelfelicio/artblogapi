@@ -120,6 +120,8 @@ As migrations em `db/migrations/` definem:
 - `posts`: autor, título, conteúdo e timestamps;
 - `comments`: post, autor, conteúdo, timestamps e `deleted_at` para exclusão
   lógica;
+- `post_likes`: relação única entre usuário e post, com chave composta,
+  timestamp e exclusão em cascata;
 - `post_images`: relação ordenada entre posts e uploads.
 
 `db/queries/` contém as consultas SQL usadas como entrada pelo SQLC, que gera os
@@ -192,6 +194,10 @@ implementada.
 
 As rotas da aplicação usam o prefixo `/api/v1`. As rotas públicas incluem
 registro, login, refresh, consulta de perfis públicos e consulta de posts.
+As respostas de posts incluem `likes_count` e `liked_by_me`; o segundo campo é
+`false` para visitantes não autenticados. Curtir e descurtir posts exige
+autenticação e usa `PUT /posts/:id/like` e `DELETE /posts/:id/like`,
+respectivamente. Ambas as operações são idempotentes.
 Logout, gerenciamento do próprio perfil, uploads e operações de criação,
 alteração e remoção de posts exigem autenticação. Comentários podem ser
 listados publicamente em `/posts/:id/comments`; criar, alterar e excluir

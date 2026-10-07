@@ -17,11 +17,13 @@ import (
 
 type stubPostService struct {
 	createPost        func(ctx context.Context, authorID uuid.UUID, title, content string, imageUploadIDs []string) (Post, error)
-	getPost           func(ctx context.Context, id uuid.UUID) (Post, error)
-	listRecentPosts   func(ctx context.Context, limit, offset int32) ([]Post, error)
-	listPostsByAuthor func(ctx context.Context, authorID uuid.UUID, limit, offset int32) ([]Post, error)
+	getPost           func(ctx context.Context, id uuid.UUID, viewerID *uuid.UUID) (Post, error)
+	listRecentPosts   func(ctx context.Context, limit, offset int32, viewerID *uuid.UUID) ([]Post, error)
+	listPostsByAuthor func(ctx context.Context, authorID uuid.UUID, limit, offset int32, viewerID *uuid.UUID) ([]Post, error)
 	updatePost        func(ctx context.Context, postID, authorID uuid.UUID, title, content *string, imageUploadIDs []string) (Post, error)
 	deletePost        func(ctx context.Context, postID, authorID uuid.UUID) error
+	likePost          func(ctx context.Context, postID, userID uuid.UUID) error
+	unlikePost        func(ctx context.Context, postID, userID uuid.UUID) error
 }
 
 func (s *stubPostService) CreatePost(ctx context.Context, authorID uuid.UUID, title, content string, imageUploadIDs []string) (Post, error) {
@@ -31,23 +33,23 @@ func (s *stubPostService) CreatePost(ctx context.Context, authorID uuid.UUID, ti
 	return Post{}, nil
 }
 
-func (s *stubPostService) GetPost(ctx context.Context, id uuid.UUID) (Post, error) {
+func (s *stubPostService) GetPost(ctx context.Context, id uuid.UUID, viewerID *uuid.UUID) (Post, error) {
 	if s.getPost != nil {
-		return s.getPost(ctx, id)
+		return s.getPost(ctx, id, viewerID)
 	}
 	return Post{}, nil
 }
 
-func (s *stubPostService) ListRecentPosts(ctx context.Context, limit, offset int32) ([]Post, error) {
+func (s *stubPostService) ListRecentPosts(ctx context.Context, limit, offset int32, viewerID *uuid.UUID) ([]Post, error) {
 	if s.listRecentPosts != nil {
-		return s.listRecentPosts(ctx, limit, offset)
+		return s.listRecentPosts(ctx, limit, offset, viewerID)
 	}
 	return nil, nil
 }
 
-func (s *stubPostService) ListPostsByAuthor(ctx context.Context, authorID uuid.UUID, limit, offset int32) ([]Post, error) {
+func (s *stubPostService) ListPostsByAuthor(ctx context.Context, authorID uuid.UUID, limit, offset int32, viewerID *uuid.UUID) ([]Post, error) {
 	if s.listPostsByAuthor != nil {
-		return s.listPostsByAuthor(ctx, authorID, limit, offset)
+		return s.listPostsByAuthor(ctx, authorID, limit, offset, viewerID)
 	}
 	return nil, nil
 }
@@ -66,6 +68,20 @@ func (s *stubPostService) DeletePost(ctx context.Context, postID, authorID uuid.
 	return nil
 }
 
+func (s *stubPostService) LikePost(ctx context.Context, postID, userID uuid.UUID) error {
+	if s.likePost != nil {
+		return s.likePost(ctx, postID, userID)
+	}
+	return nil
+}
+
+func (s *stubPostService) UnlikePost(ctx context.Context, postID, userID uuid.UUID) error {
+	if s.unlikePost != nil {
+		return s.unlikePost(ctx, postID, userID)
+	}
+	return nil
+}
+
 func setupTestRouter(svc PostService, authMiddleware gin.HandlerFunc) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -73,7 +89,7 @@ func setupTestRouter(svc PostService, authMiddleware gin.HandlerFunc) *gin.Engin
 
 	r := gin.New()
 	v1 := r.Group("/api/v1")
-	Routes(v1, h, authMiddleware)
+	Routes(v1, h, authMiddleware, func(c *gin.Context) { c.Next() })
 	return r
 }
 
@@ -143,6 +159,50 @@ func TestHandler_CreatePost_400_Validation(t *testing.T) {
 	}
 }
 
+func TestHandler_LikePost_204(t *testing.T) {
+	postID := uuid.New()
+	userID := uuid.New()
+	called := false
+	svc := &stubPostService{
+		likePost: func(ctx context.Context, gotPostID, gotUserID uuid.UUID) error {
+			called = gotPostID == postID && gotUserID == userID
+			return nil
+		},
+	}
+
+	r := setupTestRouter(svc, testauth.WithPrincipal(userID.String()))
+	w := testhttp.DoRequest(t, r, http.MethodPut, "/api/v1/posts/"+postID.String()+"/like", nil)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
+	}
+	if !called {
+		t.Fatal("expected LikePost to be called with authenticated user")
+	}
+}
+
+func TestHandler_UnlikePost_204(t *testing.T) {
+	postID := uuid.New()
+	userID := uuid.New()
+	called := false
+	svc := &stubPostService{
+		unlikePost: func(ctx context.Context, gotPostID, gotUserID uuid.UUID) error {
+			called = gotPostID == postID && gotUserID == userID
+			return nil
+		},
+	}
+
+	r := setupTestRouter(svc, testauth.WithPrincipal(userID.String()))
+	w := testhttp.DoRequest(t, r, http.MethodDelete, "/api/v1/posts/"+postID.String()+"/like", nil)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
+	}
+	if !called {
+		t.Fatal("expected UnlikePost to be called with authenticated user")
+	}
+}
+
 func TestHandler_CreatePost_401_Unauthorized(t *testing.T) {
 	svc := &stubPostService{}
 	r := setupTestRouter(svc, testauth.WithoutPrincipal())
@@ -157,7 +217,7 @@ func TestHandler_CreatePost_401_Unauthorized(t *testing.T) {
 func TestHandler_GetPost_200(t *testing.T) {
 	expectedPost := samplePost()
 	svc := &stubPostService{
-		getPost: func(ctx context.Context, id uuid.UUID) (Post, error) {
+		getPost: func(ctx context.Context, id uuid.UUID, viewerID *uuid.UUID) (Post, error) {
 			return expectedPost, nil
 		},
 	}
@@ -177,7 +237,7 @@ func TestHandler_GetPost_200(t *testing.T) {
 
 func TestHandler_GetPost_404(t *testing.T) {
 	svc := &stubPostService{
-		getPost: func(ctx context.Context, id uuid.UUID) (Post, error) {
+		getPost: func(ctx context.Context, id uuid.UUID, viewerID *uuid.UUID) (Post, error) {
 			return Post{}, ErrPostNotFound
 		},
 	}
@@ -204,7 +264,7 @@ func TestHandler_ListRecentPosts_200(t *testing.T) {
 	p1 := samplePost()
 	p2 := samplePost()
 	svc := &stubPostService{
-		listRecentPosts: func(ctx context.Context, limit, offset int32) ([]Post, error) {
+		listRecentPosts: func(ctx context.Context, limit, offset int32, viewerID *uuid.UUID) ([]Post, error) {
 			return []Post{p1, p2}, nil
 		},
 	}
@@ -227,7 +287,7 @@ func TestHandler_ListPostsByAuthor_200(t *testing.T) {
 	p1 := samplePost()
 	p1.AuthorID = authorID
 	svc := &stubPostService{
-		listPostsByAuthor: func(ctx context.Context, aID uuid.UUID, limit, offset int32) ([]Post, error) {
+		listPostsByAuthor: func(ctx context.Context, aID uuid.UUID, limit, offset int32, viewerID *uuid.UUID) ([]Post, error) {
 			if aID != authorID {
 				t.Errorf("expected authorID %v, got %v", authorID, aID)
 			}

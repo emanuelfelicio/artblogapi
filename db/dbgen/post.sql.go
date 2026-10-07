@@ -179,6 +179,13 @@ func (q *Queries) GetPostImagesByPostIDs(ctx context.Context, dollar_1 []uuid.UU
 
 const getPostWithImagesByID = `-- name: GetPostWithImagesByID :many
 SELECT p.id, p.author_id, p.title, p.content, p.created_at, p.updated_at,
+       (SELECT COUNT(*)::bigint FROM post_likes pl WHERE pl.post_id = p.id) AS likes_count,
+       EXISTS (
+           SELECT 1
+           FROM post_likes viewer_like
+           WHERE viewer_like.post_id = p.id
+             AND viewer_like.user_id = $2
+       ) AS liked_by_me,
        pi.upload_id, pi.position, pi.created_at AS image_created_at,
        u.object_key, u.content_type
 FROM posts p
@@ -188,6 +195,11 @@ WHERE p.id = $1
 ORDER BY pi.position ASC
 `
 
+type GetPostWithImagesByIDParams struct {
+	ID       uuid.UUID
+	ViewerID pgtype.UUID
+}
+
 type GetPostWithImagesByIDRow struct {
 	ID             uuid.UUID
 	AuthorID       uuid.UUID
@@ -195,6 +207,8 @@ type GetPostWithImagesByIDRow struct {
 	Content        string
 	CreatedAt      pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
+	LikesCount     int64
+	LikedByMe      bool
 	UploadID       pgtype.UUID
 	Position       pgtype.Int2
 	ImageCreatedAt pgtype.Timestamptz
@@ -202,8 +216,8 @@ type GetPostWithImagesByIDRow struct {
 	ContentType    pgtype.Text
 }
 
-func (q *Queries) GetPostWithImagesByID(ctx context.Context, id uuid.UUID) ([]GetPostWithImagesByIDRow, error) {
-	rows, err := q.db.Query(ctx, getPostWithImagesByID, id)
+func (q *Queries) GetPostWithImagesByID(ctx context.Context, arg GetPostWithImagesByIDParams) ([]GetPostWithImagesByIDRow, error) {
+	rows, err := q.db.Query(ctx, getPostWithImagesByID, arg.ID, arg.ViewerID)
 	if err != nil {
 		return nil, err
 	}
@@ -218,6 +232,8 @@ func (q *Queries) GetPostWithImagesByID(ctx context.Context, id uuid.UUID) ([]Ge
 			&i.Content,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.LikesCount,
+			&i.LikedByMe,
 			&i.UploadID,
 			&i.Position,
 			&i.ImageCreatedAt,
@@ -235,9 +251,16 @@ func (q *Queries) GetPostWithImagesByID(ctx context.Context, id uuid.UUID) ([]Ge
 }
 
 const listPostsByAuthor = `-- name: ListPostsByAuthor :many
-SELECT id, author_id, title, content, created_at, updated_at
-FROM posts
-WHERE author_id = $1
+SELECT p.id, p.author_id, p.title, p.content, p.created_at, p.updated_at,
+       (SELECT COUNT(*)::bigint FROM post_likes pl WHERE pl.post_id = p.id) AS likes_count,
+       EXISTS (
+           SELECT 1
+           FROM post_likes viewer_like
+           WHERE viewer_like.post_id = p.id
+             AND viewer_like.user_id = $4
+       ) AS liked_by_me
+FROM posts p
+WHERE p.author_id = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
 `
@@ -246,17 +269,34 @@ type ListPostsByAuthorParams struct {
 	AuthorID uuid.UUID
 	Limit    int32
 	Offset   int32
+	ViewerID pgtype.UUID
 }
 
-func (q *Queries) ListPostsByAuthor(ctx context.Context, arg ListPostsByAuthorParams) ([]Post, error) {
-	rows, err := q.db.Query(ctx, listPostsByAuthor, arg.AuthorID, arg.Limit, arg.Offset)
+type ListPostsByAuthorRow struct {
+	ID         uuid.UUID
+	AuthorID   uuid.UUID
+	Title      string
+	Content    string
+	CreatedAt  pgtype.Timestamptz
+	UpdatedAt  pgtype.Timestamptz
+	LikesCount int64
+	LikedByMe  bool
+}
+
+func (q *Queries) ListPostsByAuthor(ctx context.Context, arg ListPostsByAuthorParams) ([]ListPostsByAuthorRow, error) {
+	rows, err := q.db.Query(ctx, listPostsByAuthor,
+		arg.AuthorID,
+		arg.Limit,
+		arg.Offset,
+		arg.ViewerID,
+	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Post
+	var items []ListPostsByAuthorRow
 	for rows.Next() {
-		var i Post
+		var i ListPostsByAuthorRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.AuthorID,
@@ -264,6 +304,8 @@ func (q *Queries) ListPostsByAuthor(ctx context.Context, arg ListPostsByAuthorPa
 			&i.Content,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.LikesCount,
+			&i.LikedByMe,
 		); err != nil {
 			return nil, err
 		}
@@ -276,26 +318,45 @@ func (q *Queries) ListPostsByAuthor(ctx context.Context, arg ListPostsByAuthorPa
 }
 
 const listRecentPosts = `-- name: ListRecentPosts :many
-SELECT id, author_id, title, content, created_at, updated_at
-FROM posts
+SELECT p.id, p.author_id, p.title, p.content, p.created_at, p.updated_at,
+       (SELECT COUNT(*)::bigint FROM post_likes pl WHERE pl.post_id = p.id) AS likes_count,
+       EXISTS (
+           SELECT 1
+           FROM post_likes viewer_like
+           WHERE viewer_like.post_id = p.id
+             AND viewer_like.user_id = $3
+       ) AS liked_by_me
+FROM posts p
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
 `
 
 type ListRecentPostsParams struct {
-	Limit  int32
-	Offset int32
+	Limit    int32
+	Offset   int32
+	ViewerID pgtype.UUID
 }
 
-func (q *Queries) ListRecentPosts(ctx context.Context, arg ListRecentPostsParams) ([]Post, error) {
-	rows, err := q.db.Query(ctx, listRecentPosts, arg.Limit, arg.Offset)
+type ListRecentPostsRow struct {
+	ID         uuid.UUID
+	AuthorID   uuid.UUID
+	Title      string
+	Content    string
+	CreatedAt  pgtype.Timestamptz
+	UpdatedAt  pgtype.Timestamptz
+	LikesCount int64
+	LikedByMe  bool
+}
+
+func (q *Queries) ListRecentPosts(ctx context.Context, arg ListRecentPostsParams) ([]ListRecentPostsRow, error) {
+	rows, err := q.db.Query(ctx, listRecentPosts, arg.Limit, arg.Offset, arg.ViewerID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Post
+	var items []ListRecentPostsRow
 	for rows.Next() {
-		var i Post
+		var i ListRecentPostsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.AuthorID,
@@ -303,6 +364,8 @@ func (q *Queries) ListRecentPosts(ctx context.Context, arg ListRecentPostsParams
 			&i.Content,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.LikesCount,
+			&i.LikedByMe,
 		); err != nil {
 			return nil, err
 		}

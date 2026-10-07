@@ -182,7 +182,7 @@ func main() {
 		user.Routes(v1, userHandler, authMiddleware)
 		storage.Routes(v1, storageHandler, authMiddleware)
 		comment.Routes(v1, commentHandler, authMiddleware)
-		post.Routes(v1, postHandler, authMiddleware)
+		post.Routes(v1, postHandler, authMiddleware, middleware.OptionalAuthentication(authTokenProvider))
 	}
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
 
