@@ -4,10 +4,38 @@ help:
 	@echo 'Usage:'
 	@sed -n 's/^##//p' ${MAKEFILE_LIST} | column -t -s ':' | sed -e 's/^/ /'
 
+## up: start local dependencies, apply migrations and run the API
+.PHONY: up
+up: check-env
+	docker compose up -d --wait db minio
+	docker compose run --rm minio-init
+	$(MAKE) migrate-up
+	docker compose up --build api
+
+## clean: stop local dependencies and remove their volumes
+.PHONY: clean
+clean:
+	docker compose down -v
+
+## logs: follow local dependency logs
+.PHONY: logs
+logs:
+	docker compose logs -f
+
+## check-env: verify that the local environment file exists
+.PHONY: check-env
+check-env:
+	@test -f .env || (echo "Erro: arquivo .env não encontrado. Execute: cp .env.example .env" >&2; exit 1)
+
 ## build: build go application
 .PHONY: build
 build:
 	go build -o bin/api cmd/main.go
+
+## migrate-up: apply pending database migrations
+.PHONY: migrate-up
+migrate-up: check-env
+	@set -a; . ./.env; set +a; go tool goose up "$$GOOSE_DRIVER" "$$GOOSE_DBSTRING" -dir "$$GOOSE_MIGRATION_DIR" up
 
 ## migrate-create: Creates a new migration (e.g., make migrate-create NAME=add_users)
 .PHONY: migrate-create
