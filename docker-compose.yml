@@ -12,7 +12,7 @@ services:
       - db_data:/var/lib/postgresql/data
 
   minio:
-    image: minio/minio:latest
+    image: cgr.dev/chainguard/minio@sha256:a05a4497e8dce3cb7a7a1bf1872ba5d30ea988f1e8c22c9e0920503761c4b5f1
     restart: always
     ports:
       - "9000:9000"
@@ -24,14 +24,14 @@ services:
     volumes:
       - minio_data:/data
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/ready" ]
+      test: [ "CMD", "bash", "-c", "echo > /dev/tcp/127.0.0.1/9000" ]
       interval: 5s
       timeout: 5s
       retries: 5
       start_period: 5s
 
   minio-init:
-    image: minio/mc:latest
+    image: cgr.dev/chainguard/minio@sha256:a05a4497e8dce3cb7a7a1bf1872ba5d30ea988f1e8c22c9e0920503761c4b5f1
     depends_on:
       minio:
         condition: service_healthy
