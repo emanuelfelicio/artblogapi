@@ -132,6 +132,9 @@ func TestHandler_GetPublicProfile_200(t *testing.T) {
 	}
 
 	resp := testhttp.DecodeResponse[PublicProfileResponse](t, w)
+	if resp.Data.ID != u.ID.String() {
+		t.Errorf("expected id %q, got %q", u.ID, resp.Data.ID)
+	}
 	if resp.Data.Username != u.Username {
 		t.Errorf("expected username %q, got %q", u.Username, resp.Data.Username)
 	}
@@ -173,6 +176,9 @@ func TestHandler_GetMyProfile_200(t *testing.T) {
 	}
 
 	resp := testhttp.DecodeResponse[MyProfileResponse](t, w)
+	if resp.Data.ID != u.ID.String() {
+		t.Errorf("expected id %q, got %q", u.ID, resp.Data.ID)
+	}
 	if resp.Data.Email != u.Email {
 		t.Errorf("expected email %q, got %q", u.Email, resp.Data.Email)
 	}
