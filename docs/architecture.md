@@ -8,7 +8,10 @@ processamento assíncrono de imagens.
 
 O cliente chama a API HTTP. Para arquivos, a API cria uma autorização
 temporária e o cliente envia o conteúdo diretamente ao storage compatível com
-S3.
+S3. A API HTTP e o worker de imagens executam no mesmo processo. O PostgreSQL
+armazena identidades, sessões, posts, uploads e o estado durável dos trabalhos;
+o storage usa AWS SDK for Go v2 contra um provedor S3-compatible. MinIO é usado
+no desenvolvimento local.
 
 ```mermaid
 flowchart LR
@@ -37,35 +40,7 @@ obrigatórios; os demais valores possuem defaults quando aplicável.
 Ao receber `SIGINT` ou `SIGTERM`, o processo encerra o servidor HTTP, cancela o
 worker, aguarda suas goroutines e fecha o pool PostgreSQL.
 
-## 4. Visão de componentes em runtime
-
-Os componentes abaixo representam responsabilidades em runtime. A API e o
-worker de imagens executam no mesmo processo.
-
-```mermaid
-flowchart TB
-    Client[Cliente HTTP] --> App[Aplicação Artblog<br/>API HTTP + worker local]
-    App --> DB[(PostgreSQL)]
-    App --> S3[(Object storage<br/>S3-compatible)]
-```
-
-### Aplicação
-
-A API HTTP e o worker de imagens executam no mesmo binário. Não existe um
-serviço de worker separado.
-
-### PostgreSQL
-
-Armazena identidades, sessões, uploads, posts, relações de imagens e o estado
-durável dos trabalhos de processamento.
-
-### Object storage
-
-O código usa AWS SDK for Go v2 contra um provedor S3-compatible. MinIO é usado
-somente no desenvolvimento local. Endpoint, bucket, região, credenciais, TTL
-de presign e path style são configuráveis.
-
-## 5. Organização do código
+## 4. Organização do código
 
 As features principais ficam em `internal/auth`, `internal/user`,
 `internal/post`, `internal/comment` e `internal/storage`.
@@ -108,11 +83,22 @@ do modelo atual.
 
 `internal/storage` coordena inicialização, conclusão, status, vínculo e
 substituição de uploads. `internal/storage/image` processa imagens e o worker
-local coordena o processamento assíncrono.
+de imagens coordena o processamento assíncrono.
 
-## 6. Dados, migrations e código gerado
+### Decisões arquiteturais
 
-As migrations em `db/migrations/` definem:
+- PostgreSQL também funciona como fila durável, evitando uma dependência
+  adicional para os jobs de imagem.
+- O worker de imagens permanece no mesmo processo para simplificar a operação
+  local; a fila persistida mantém a possibilidade de extraí-lo futuramente
+  para um serviço separado.
+- Uploads são enviados diretamente ao storage compatível com S3 por URL
+  pré-assinada, reduzindo o tráfego de arquivos pela API.
+- SQLC mantém as queries explícitas e gera código tipado a partir do SQL.
+
+## 5. Dados, migrações e código gerado
+
+As migrações em `db/migrations/` definem:
 
 - `users`: identidade, credenciais, perfil e referências de avatar/banner;
 - `sessions`: hash, expiração, revogação e metadados de refresh;
@@ -128,11 +114,14 @@ As migrations em `db/migrations/` definem:
 arquivos em `db/dbgen/`; esses arquivos não devem ser editados manualmente.
 As migrações são aplicadas pelo Goose.
 
-Os testes de integração sobem PostgreSQL com testcontainers e aplicam as
-migrations automaticamente. A execução normal da API não aplica migrations;
-o banco deve estar preparado antes do início do processo.
+Os testes de integração sobem PostgreSQL com Testcontainers e aplicam as
+migrações automaticamente. A execução normal da API não aplica migrações;
+o banco deve estar preparado antes do início do processo. No desenvolvimento
+local, `make up` sobe as dependências, aplica as migrações pendentes e inicia
+a API em um container; `make migrate-up` pode ser usado para aplicar somente
+as migrações.
 
-## 7. Runtime
+## 6. Runtime
 
 ### Upload e processamento de imagens
 
@@ -173,12 +162,60 @@ O fluxo implementado é:
    objeto final;
 6. o cliente consulta o estado persistido.
 
-O PostgreSQL é a fila durável. A notificação em memória é somente um sinal para
-acelerar o worker. Heartbeat, retry, backoff, recuperação de jobs órfãos e
-`FOR UPDATE SKIP LOCKED` evitam depender de uma requisição ativa.
+O PostgreSQL é a fila durável.
 
-O worker verifica o objeto final para manter idempotência, cancela o contexto
-no shutdown e aguarda suas goroutines.
+### PostgreSQL como fila de trabalhos
+
+O PostgreSQL funciona como uma fila baseada em estado. O job é o próprio
+registro em `uploads`, e seu ciclo é representado pelo status:
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING: upload iniciado
+    PENDING --> PROCESSING: arquivo confirmado
+    PROCESSING --> COMPLETED: processamento concluído
+    PROCESSING --> PROCESSING: erro temporário\nretry + backoff
+    PROCESSING --> REJECTED: erro permanente<br/>ou limite de tentativas
+    COMPLETED --> BOUND: associado a post/perfil
+    COMPLETED --> SUPERSEDED: substituído
+```
+
+Além do fluxo principal de processamento, `EXPIRED` representa uploads que
+perderam a validade antes da conclusão; `BOUND` indica mídia já associada a uma
+entidade; `SUPERSEDED` indica mídia substituída; e `DELETED` representa mídia
+removida do ciclo ativo. Esses estados complementam o processamento e não são
+novas etapas do worker.
+
+O worker busca o próximo job elegível, bloqueia somente a linha selecionada
+com `SKIP LOCKED` e registra o heartbeat:
+
+```mermaid
+flowchart LR
+    A[Job PROCESSING] --> B{Elegível?}
+    B -- não --> A
+    B -- sim --> C[FOR UPDATE SKIP LOCKED]
+    C --> D[Heartbeat]
+    D --> E[Worker processa]
+    E --> F{Resultado}
+    F -- sucesso --> G[COMPLETED]
+    F -- erro temporário --> H[retry_count + 1<br/>next_retry_at]
+    H --> A
+    F -- erro permanente --> I[REJECTED]
+```
+
+| Recurso | Papel |
+| --- | --- |
+| PostgreSQL | Fila durável e fonte de verdade |
+| `SKIP LOCKED` | Concorrência segura entre workers |
+| `heartbeat_at` | Recuperação de jobs órfãos |
+| `retry_count` | Limite de tentativas |
+| `next_retry_at` | Backoff entre tentativas |
+| Status | Ciclo de vida persistido |
+
+O canal em memória `triggerChan` não contém o job e não é requisito de
+correção. Ele é apenas uma notificação não bloqueante para reduzir a latência
+entre a confirmação do upload e a busca do worker. Um ticker periódico garante
+que jobs persistidos também sejam encontrados quando a notificação for perdida.
 
 ### Vínculos de mídia
 
@@ -188,7 +225,17 @@ transação. Um upload processado só pode ser vinculado uma vez. Substituiçõe
 podem marcar a mídia anterior como `SUPERSEDED`; a coleta física ainda não está
 implementada.
 
-## 8. Operação e interfaces
+### Invariantes do domínio
+
+- posts podem ter no máximo dez imagens;
+- comentários possuem limite de 500 caracteres e só podem ser alterados pelo
+  próprio autor;
+- somente uploads processados, pertencentes ao usuário e com finalidade
+  compatível podem ser associados;
+- um upload processado só pode ser vinculado uma vez;
+- cada usuário pode ter no máximo uma curtida por post.
+
+## 7. Operação e interfaces
 
 ### Superfície HTTP
 
@@ -254,24 +301,20 @@ componentes de configuração e resposta.
 O conteúdo textual dos posts é texto simples. O servidor não renderiza HTML a
 partir desse conteúdo.
 
-## 9. Segurança e limites
+## 8. Segurança e limites
 
-- senhas são armazenadas com bcrypt;
-- access tokens usam JWT com issuer e expiração;
-- refresh tokens são armazenados somente como hash, rotacionados a cada
-  renovação e revogados em caso de reuse;
-- refresh cookies usam `HttpOnly` e `SameSite`; `Secure` é configurável e deve
-  ser habilitado no ambiente HTTPS;
-- endpoints protegidos validam o usuário autenticado;
+- O fluxo de autenticação, a rotação de sessões e os cookies de refresh estão
+  descritos na seção [Autenticação e sessões](#autenticação-e-sessões).
 - uploads validam finalidade, tipo declarado e tamanho máximo por finalidade;
 - URLs pré-assinadas incluem tipo e tamanho esperados;
+- endpoints protegidos validam o usuário autenticado;
 - o worker valida dimensões e pixels da imagem de entrada de acordo com a
   finalidade antes da decodificação completa, limita as dimensões da imagem
   processada na saída e usa retry,
   heartbeat, recuperação de jobs obsoletos e processamento idempotente;
 - vínculos de mídia verificam propriedade, finalidade, estado e uso único;
 - posts limitam título, quantidade de imagens e paginação;
-- migrations e queries usam SQLC, queries parametrizadas e constraints do
+- migrações e queries usam SQLC, queries parametrizadas e constraints do
   PostgreSQL.
 - O sistema usa autorização por propriedade 'ownership';
 - rate limiting em memória usando token bucket protege a API `/api/v1` e
@@ -281,6 +324,10 @@ partir desse conteúdo.
   (`RATE_LIMIT_TRUSTED_PROXIES`), ignorando headers de encaminhamento de
   origens não confiáveis para prevenir spoofing de IP;
 
-## 10. Testes
+## 9. Testes
 
-Os comandos principais de validação estão definidos no `Makefile`. 
+Os testes unitários são organizados por camada e cobrem handlers, services,
+repositories, middleware, autenticação, processamento de imagens e worker. Os
+testes de integração usam PostgreSQL via Testcontainers e aplicam as migrações
+automaticamente. Os comandos principais de validação estão definidos no
+`Makefile`.
