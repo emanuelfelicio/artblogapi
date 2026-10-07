@@ -33,7 +33,7 @@ func (s *stubMediaBinder) Supersede(ctx context.Context, uploadID uuid.UUID) err
 type stubRepository struct {
 	withTransaction          func(ctx context.Context, fn func(txCtx context.Context) error) error
 	createPost               func(ctx context.Context, id, authorID uuid.UUID, title, content string) (Post, error)
-	getPostWithImages        func(ctx context.Context, id uuid.UUID) (Post, error)
+	getPostWithImages        func(ctx context.Context, id uuid.UUID, viewerID *uuid.UUID) (Post, error)
 	getPostByIDForUpdate     func(ctx context.Context, id uuid.UUID) (Post, error)
 	updatePost               func(ctx context.Context, id uuid.UUID, title, content *string) (Post, error)
 	deletePost               func(ctx context.Context, id uuid.UUID) error
@@ -42,8 +42,10 @@ type stubRepository struct {
 	updatePostImagePositions func(ctx context.Context, postID uuid.UUID, uploadIDs []uuid.UUID, positions []int16) error
 	deletePostImagesByPostID func(ctx context.Context, postID uuid.UUID) ([]uuid.UUID, error)
 	getPostImagesByPostIDs   func(ctx context.Context, postIDs []uuid.UUID) (map[uuid.UUID][]PostImage, error)
-	listRecentPosts          func(ctx context.Context, limit, offset int32) ([]Post, error)
-	listPostsByAuthor        func(ctx context.Context, authorID uuid.UUID, limit, offset int32) ([]Post, error)
+	listRecentPosts          func(ctx context.Context, limit, offset int32, viewerID *uuid.UUID) ([]Post, error)
+	listPostsByAuthor        func(ctx context.Context, authorID uuid.UUID, limit, offset int32, viewerID *uuid.UUID) ([]Post, error)
+	likePost                 func(ctx context.Context, postID, userID uuid.UUID) error
+	unlikePost               func(ctx context.Context, postID, userID uuid.UUID) error
 }
 
 func (r *stubRepository) WithTransaction(ctx context.Context, fn func(txCtx context.Context) error) error {
@@ -60,9 +62,9 @@ func (r *stubRepository) CreatePost(ctx context.Context, id, authorID uuid.UUID,
 	return Post{ID: id, AuthorID: authorID, Title: title, Content: content, CreatedAt: time.Now(), UpdatedAt: time.Now()}, nil
 }
 
-func (r *stubRepository) GetPostWithImages(ctx context.Context, id uuid.UUID) (Post, error) {
+func (r *stubRepository) GetPostWithImages(ctx context.Context, id uuid.UUID, viewerID *uuid.UUID) (Post, error) {
 	if r.getPostWithImages != nil {
-		return r.getPostWithImages(ctx, id)
+		return r.getPostWithImages(ctx, id, viewerID)
 	}
 	return Post{ID: id, CreatedAt: time.Now(), UpdatedAt: time.Now()}, nil
 }
@@ -123,26 +125,42 @@ func (r *stubRepository) GetPostImagesByPostIDs(ctx context.Context, postIDs []u
 	return make(map[uuid.UUID][]PostImage), nil
 }
 
-func (r *stubRepository) ListRecentPosts(ctx context.Context, limit, offset int32) ([]Post, error) {
+func (r *stubRepository) ListRecentPosts(ctx context.Context, limit, offset int32, viewerID *uuid.UUID) ([]Post, error) {
 	if r.listRecentPosts != nil {
-		return r.listRecentPosts(ctx, limit, offset)
+		return r.listRecentPosts(ctx, limit, offset, viewerID)
 	}
 	return nil, nil
 }
 
-func (r *stubRepository) ListPostsByAuthor(ctx context.Context, authorID uuid.UUID, limit, offset int32) ([]Post, error) {
+func (r *stubRepository) ListPostsByAuthor(ctx context.Context, authorID uuid.UUID, limit, offset int32, viewerID *uuid.UUID) ([]Post, error) {
 	if r.listPostsByAuthor != nil {
-		return r.listPostsByAuthor(ctx, authorID, limit, offset)
+		return r.listPostsByAuthor(ctx, authorID, limit, offset, viewerID)
 	}
+
 	return nil, nil
+}
+
+func (r *stubRepository) LikePost(ctx context.Context, postID, userID uuid.UUID) error {
+	if r.likePost != nil {
+		return r.likePost(ctx, postID, userID)
+	}
+	return nil
+}
+
+func (r *stubRepository) UnlikePost(ctx context.Context, postID, userID uuid.UUID) error {
+	if r.unlikePost != nil {
+		return r.unlikePost(ctx, postID, userID)
+	}
+	return nil
 }
 
 func TestCreatePost_Success_NoImages(t *testing.T) {
 	repo := &stubRepository{
-		getPostWithImages: func(ctx context.Context, id uuid.UUID) (Post, error) {
+		getPostWithImages: func(ctx context.Context, id uuid.UUID, viewerID *uuid.UUID) (Post, error) {
 			return Post{ID: id, Title: "My First Post", Content: "Hello world content", Images: []PostImage{}}, nil
 		},
 	}
+
 	media := &stubMediaBinder{}
 	svc := NewService(repo, media)
 
@@ -183,7 +201,7 @@ func TestCreatePost_Success_WithImages(t *testing.T) {
 			batchPositions = positions
 			return nil
 		},
-		getPostWithImages: func(ctx context.Context, id uuid.UUID) (Post, error) {
+		getPostWithImages: func(ctx context.Context, id uuid.UUID, viewerID *uuid.UUID) (Post, error) {
 			return Post{
 				ID: id,
 				Images: []PostImage{
@@ -273,7 +291,7 @@ func TestGetPost_Success(t *testing.T) {
 	imgID := uuid.New()
 
 	repo := &stubRepository{
-		getPostWithImages: func(ctx context.Context, id uuid.UUID) (Post, error) {
+		getPostWithImages: func(ctx context.Context, id uuid.UUID, viewerID *uuid.UUID) (Post, error) {
 			return Post{
 				ID:        id,
 				AuthorID:  authorID,
@@ -289,7 +307,7 @@ func TestGetPost_Success(t *testing.T) {
 	}
 
 	svc := NewService(repo, &stubMediaBinder{})
-	p, err := svc.GetPost(context.Background(), postID)
+	p, err := svc.GetPost(context.Background(), postID, nil)
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
@@ -310,13 +328,13 @@ func TestGetPost_Success(t *testing.T) {
 
 func TestGetPost_NotFound(t *testing.T) {
 	repo := &stubRepository{
-		getPostWithImages: func(ctx context.Context, id uuid.UUID) (Post, error) {
+		getPostWithImages: func(ctx context.Context, id uuid.UUID, viewerID *uuid.UUID) (Post, error) {
 			return Post{}, ErrPostNotFound
 		},
 	}
 
 	svc := NewService(repo, &stubMediaBinder{})
-	_, err := svc.GetPost(context.Background(), uuid.New())
+	_, err := svc.GetPost(context.Background(), uuid.New(), nil)
 	if !errors.Is(err, ErrPostNotFound) {
 		t.Errorf("expected ErrPostNotFound, got %v", err)
 	}
@@ -327,7 +345,7 @@ func TestListRecentPosts_Success(t *testing.T) {
 	post2ID := uuid.New()
 
 	repo := &stubRepository{
-		listRecentPosts: func(ctx context.Context, limit, offset int32) ([]Post, error) {
+		listRecentPosts: func(ctx context.Context, limit, offset int32, viewerID *uuid.UUID) ([]Post, error) {
 			return []Post{
 				{ID: post1ID, Title: "Post 1"},
 				{ID: post2ID, Title: "Post 2"},
@@ -342,7 +360,7 @@ func TestListRecentPosts_Success(t *testing.T) {
 	}
 
 	svc := NewService(repo, &stubMediaBinder{})
-	posts, err := svc.ListRecentPosts(context.Background(), 10, 0)
+	posts, err := svc.ListRecentPosts(context.Background(), 10, 0, nil)
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
@@ -363,7 +381,7 @@ func TestListPostsByAuthor_Success(t *testing.T) {
 	postID := uuid.New()
 
 	repo := &stubRepository{
-		listPostsByAuthor: func(ctx context.Context, aID uuid.UUID, limit, offset int32) ([]Post, error) {
+		listPostsByAuthor: func(ctx context.Context, aID uuid.UUID, limit, offset int32, viewerID *uuid.UUID) ([]Post, error) {
 			if aID != authorID {
 				t.Errorf("expected authorID %v, got %v", authorID, aID)
 			}
@@ -377,7 +395,7 @@ func TestListPostsByAuthor_Success(t *testing.T) {
 	}
 
 	svc := NewService(repo, &stubMediaBinder{})
-	posts, err := svc.ListPostsByAuthor(context.Background(), authorID, 10, 0)
+	posts, err := svc.ListPostsByAuthor(context.Background(), authorID, 10, 0, nil)
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
