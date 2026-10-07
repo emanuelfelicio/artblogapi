@@ -204,6 +204,8 @@ definitions:
         type: string
       email:
         type: string
+      id:
+        type: string
       is_active:
         type: boolean
       updated_at:
@@ -254,6 +256,8 @@ definitions:
       created_at:
         type: string
       display_name:
+        type: string
+      id:
         type: string
       username:
         type: string

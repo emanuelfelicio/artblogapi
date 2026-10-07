@@ -353,6 +353,7 @@ func (h *handler) toPublicResponse(u User) PublicProfileResponse {
 	}
 
 	return PublicProfileResponse{
+		ID:          u.ID.String(),
 		Username:    u.Username,
 		DisplayName: u.DisplayName,
 		Bio:         u.Bio,
@@ -376,6 +377,7 @@ func (h *handler) toMyResponse(u User) MyProfileResponse {
 	}
 
 	return MyProfileResponse{
+		ID:          u.ID.String(),
 		Username:    u.Username,
 		DisplayName: u.DisplayName,
 		Email:       u.Email,

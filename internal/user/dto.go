@@ -16,6 +16,7 @@ type UpdateBannerRequest struct {
 }
 
 type PublicProfileResponse struct {
+	ID          string    `json:"id"`
 	Username    string    `json:"username"`
 	DisplayName string    `json:"display_name"`
 	Bio         string    `json:"bio"`
@@ -25,6 +26,7 @@ type PublicProfileResponse struct {
 }
 
 type MyProfileResponse struct {
+	ID          string    `json:"id"`
 	Username    string    `json:"username"`
 	DisplayName string    `json:"display_name"`
 	Email       string    `json:"email"`

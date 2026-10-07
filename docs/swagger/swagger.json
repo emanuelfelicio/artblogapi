@@ -1729,6 +1729,9 @@
                 "email": {
                     "type": "string"
                 },
+                "id": {
+                    "type": "string"
+                },
                 "is_active": {
                     "type": "boolean"
                 },
@@ -1805,6 +1808,9 @@
                     "type": "string"
                 },
                 "display_name": {
+                    "type": "string"
+                },
+                "id": {
                     "type": "string"
                 },
                 "username": {
