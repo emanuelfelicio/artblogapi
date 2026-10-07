@@ -17,6 +17,7 @@ import (
 )
 
 const (
+	minioImage        = "cgr.dev/chainguard/minio@sha256:a05a4497e8dce3cb7a7a1bf1872ba5d30ea988f1e8c22c9e0920503761c4b5f1"
 	integrationBucket = "storage-integration"
 	minioAccessKey    = "minioadmin"
 	minioSecretKey    = "minioadmin"
@@ -143,7 +144,7 @@ func startMinIO(t *testing.T, ctx context.Context) (testcontainers.Container, st
 
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        "minio/minio:latest",
+			Image:        minioImage,
 			Env:          map[string]string{"MINIO_ROOT_USER": minioAccessKey, "MINIO_ROOT_PASSWORD": minioSecretKey},
 			Cmd:          []string{"server", "/data"},
 			ExposedPorts: []string{"9000/tcp"},

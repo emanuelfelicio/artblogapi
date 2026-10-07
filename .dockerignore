@@ -1,0 +1,14 @@
+.env
+.git
+.github
+.vscode
+bin
+coverage.out
+*.log
+Dockerfile
+docker-compose.yml
+Makefile
+README.md
+AGENTS.md
+.gitignore
+.dockerignore
