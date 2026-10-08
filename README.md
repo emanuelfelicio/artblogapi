@@ -85,9 +85,7 @@ sequenceDiagram
     API->>DB: Persiste comentário
     API-->>User: Comentário criado
 ```
-
-## Diferenciais técnicos
-
+---
 ### Arquitetura em camadas
 
 O código preserva uma separação clara de responsabilidades:
@@ -302,7 +300,7 @@ sessão do Swagger. Como o login atual retorna o JWT diretamente no corpo da
 resposta, é necessário copiar o token e informá-lo manualmente no campo
 `Bearer` seguido do token.
 
-## Validação
+### Validação
 
 ```bash
 gofmt -w .
